@@ -6,7 +6,7 @@ public sealed class Owned<T> : IDisposable
 
     public T Value { get; }
 
-    public Owned(T value, IDisposable scope)
+    internal Owned(T value, IDisposable scope)
     {
         Value = value;
         _scope = scope;

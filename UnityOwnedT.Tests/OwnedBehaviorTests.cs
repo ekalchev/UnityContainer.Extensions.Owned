@@ -1,6 +1,7 @@
 using Autofac;
 using NUnit.Framework;
 using Unity;
+using Unity.Resolution;
 
 namespace UnityOwnedT.Tests;
 
@@ -13,6 +14,8 @@ public class OwnedBehaviorTests
         TrackedService.ResetCounter();
         Dependency.ResetCounter();
         ServiceWithDependency.ResetCounter();
+        DeepRoot.ResetCounter();
+        NonDisposableService.ResetCounter();
     }
 
     [Test]
@@ -163,6 +166,35 @@ public class OwnedBehaviorTests
     }
 
     [Test]
+    public void Dispose_DoesNotCascadeToSingletonDependency()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>().SingleInstance();
+        autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterSingleton<IDependency, Dependency>();
+        unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithDependency>>();
+        var afService = (ServiceWithDependency)afOwned.Value;
+        var afDep = (Dependency)afService.Dependency;
+        afOwned.Dispose();
+
+        var uOwned = unity.Resolve<Owned<IServiceWithDependency>>();
+        var uService = (ServiceWithDependency)uOwned.Value;
+        var uDep = (Dependency)uService.Dependency;
+        uOwned.Dispose();
+
+        Assert.That(afService.IsDisposed, Is.True);
+        Assert.That(afDep.IsDisposed, Is.False);
+        Assert.That(uService.IsDisposed, Is.EqualTo(afService.IsDisposed));
+        Assert.That(uDep.IsDisposed, Is.EqualTo(afDep.IsDisposed));
+    }
+
+    [Test]
     public void MultipleOwned_HaveIndependentLifetimes()
     {
         var autofacBuilder = new ContainerBuilder();
@@ -207,6 +239,10 @@ public class OwnedBehaviorTests
         using var unity = new UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
+        unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
+            (object)new Func<string, int, Owned<IConnection>>((connStr, retries) => c.Resolve<Owned<IConnection>>(
+                new DependencyOverride<string>(connStr),
+                new DependencyOverride<int>(retries))));
 
         var afFactory = autofac.Resolve<Func<string, int, Autofac.Features.OwnedInstances.Owned<IConnection>>>();
         var afOwned = afFactory("server=localhost", 3);
@@ -233,6 +269,10 @@ public class OwnedBehaviorTests
         using var unity = new UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
+        unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
+            (object)new Func<string, int, Owned<IConnection>>((connStr, retries) => c.Resolve<Owned<IConnection>>(
+                new DependencyOverride<string>(connStr),
+                new DependencyOverride<int>(retries))));
 
         var afFactory = autofac.Resolve<Func<string, int, Autofac.Features.OwnedInstances.Owned<IConnection>>>();
         using var afOwned1 = afFactory("a", 1);
@@ -259,6 +299,10 @@ public class OwnedBehaviorTests
         using var unity = new UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
+        unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
+            (object)new Func<string, int, Owned<IConnection>>((connStr, retries) => c.Resolve<Owned<IConnection>>(
+                new DependencyOverride<string>(connStr),
+                new DependencyOverride<int>(retries))));
 
         var afFactory = autofac.Resolve<Func<string, int, Autofac.Features.OwnedInstances.Owned<IConnection>>>();
         var afOwned = afFactory("conn", 1);
@@ -284,6 +328,10 @@ public class OwnedBehaviorTests
         using var unity = new UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
+        unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
+            (object)new Func<string, int, Owned<IConnection>>((connStr, retries) => c.Resolve<Owned<IConnection>>(
+                new DependencyOverride<string>(connStr),
+                new DependencyOverride<int>(retries))));
 
         var afFactory = autofac.Resolve<Func<string, int, Autofac.Features.OwnedInstances.Owned<IConnection>>>();
         var afOwned1 = afFactory("a", 1);
@@ -700,6 +748,9 @@ public class OwnedBehaviorTests
         using var unity = new UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IGreeter, Greeter>();
+        unity.RegisterFactory<Func<string, Owned<IGreeter>>>(c =>
+            (object)new Func<string, Owned<IGreeter>>(name => c.Resolve<Owned<IGreeter>>(
+                new DependencyOverride<string>(name))));
 
         var afFactory = autofac.Resolve<Func<string, Autofac.Features.OwnedInstances.Owned<IGreeter>>>();
         var afOwned = afFactory("Alice");
@@ -715,5 +766,262 @@ public class OwnedBehaviorTests
         Assert.That(uGreeter.Name, Is.EqualTo(afGreeter.Name));
         Assert.That(afGreeter.IsDisposed, Is.True);
         Assert.That(uGreeter.IsDisposed, Is.EqualTo(afGreeter.IsDisposed));
+    }
+
+    [Test]
+    public void Dispose_CascadesToDeepDependencyChain()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>();
+        autofacBuilder.RegisterType<DeepRoot>().As<IDeepRoot>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IDeepRoot, DeepRoot>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IDeepRoot>>();
+        var afRoot = (DeepRoot)afOwned.Value;
+        var afDep = (Dependency)afRoot.Dependency;
+        afOwned.Dispose();
+
+        var uOwned = unity.Resolve<Owned<IDeepRoot>>();
+        var uRoot = (DeepRoot)uOwned.Value;
+        var uDep = (Dependency)uRoot.Dependency;
+        uOwned.Dispose();
+
+        Assert.That(afRoot.IsDisposed, Is.True);
+        Assert.That(afDep.IsDisposed, Is.True);
+        Assert.That(uRoot.IsDisposed, Is.EqualTo(afRoot.IsDisposed));
+        Assert.That(uDep.IsDisposed, Is.EqualTo(afDep.IsDisposed));
+    }
+
+    [Test]
+    public void SingletonDependency_SharedAcrossMultipleOwnedScopes()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>();
+        autofacBuilder.RegisterType<ServiceWithSingletonDependency>().As<IServiceWithSingletonDependency>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterSingleton<ITrackedService, TrackedService>();
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IServiceWithSingletonDependency, ServiceWithSingletonDependency>();
+
+        var afOwned1 = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithSingletonDependency>>();
+        var afOwned2 = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithSingletonDependency>>();
+        var afSingleton1 = (TrackedService)afOwned1.Value.SingletonDep;
+        var afSingleton2 = (TrackedService)afOwned2.Value.SingletonDep;
+        var afSame = ReferenceEquals(afSingleton1, afSingleton2);
+        afOwned1.Dispose();
+
+        var uOwned1 = unity.Resolve<Owned<IServiceWithSingletonDependency>>();
+        var uOwned2 = unity.Resolve<Owned<IServiceWithSingletonDependency>>();
+        var uSingleton1 = (TrackedService)uOwned1.Value.SingletonDep;
+        var uSingleton2 = (TrackedService)uOwned2.Value.SingletonDep;
+        var uSame = ReferenceEquals(uSingleton1, uSingleton2);
+        uOwned1.Dispose();
+
+        Assert.That(afSame, Is.True);
+        Assert.That(uSame, Is.EqualTo(afSame));
+        Assert.That(afSingleton1.IsDisposed, Is.False);
+        Assert.That(uSingleton1.IsDisposed, Is.EqualTo(afSingleton1.IsDisposed));
+
+        afOwned2.Dispose();
+        uOwned2.Dispose();
+
+        Assert.That(afSingleton2.IsDisposed, Is.False);
+        Assert.That(uSingleton2.IsDisposed, Is.EqualTo(afSingleton2.IsDisposed));
+    }
+
+    [Test]
+    public void Owned_NonDisposableValue_WorksWithoutError()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<NonDisposableService>().As<INonDisposableService>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<INonDisposableService, NonDisposableService>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<INonDisposableService>>();
+        var afValue = afOwned.Value;
+
+        var uOwned = unity.Resolve<Owned<INonDisposableService>>();
+        var uValue = uOwned.Value;
+
+        Assert.That(afValue, Is.Not.Null);
+        Assert.That(uValue, Is.Not.Null);
+
+        Assert.DoesNotThrow(() => afOwned.Dispose());
+        Assert.DoesNotThrow(() => uOwned.Dispose());
+    }
+
+    [Test]
+    public void Dispose_NonDisposableMiddle_StillDisposesLeafDependency()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>();
+        autofacBuilder.RegisterType<NonDisposableMiddle>().As<INonDisposableMiddle>();
+        autofacBuilder.RegisterType<ServiceWithNonDisposableMiddle>().As<IServiceWithNonDisposableMiddle>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<INonDisposableMiddle, NonDisposableMiddle>();
+        unity.RegisterType<IServiceWithNonDisposableMiddle, ServiceWithNonDisposableMiddle>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithNonDisposableMiddle>>();
+        var afService = (ServiceWithNonDisposableMiddle)afOwned.Value;
+        var afDep = (Dependency)afService.Middle.Dependency;
+        afOwned.Dispose();
+
+        var uOwned = unity.Resolve<Owned<IServiceWithNonDisposableMiddle>>();
+        var uService = (ServiceWithNonDisposableMiddle)uOwned.Value;
+        var uDep = (Dependency)uService.Middle.Dependency;
+        uOwned.Dispose();
+
+        Assert.That(afService.IsDisposed, Is.True);
+        Assert.That(afDep.IsDisposed, Is.True);
+        Assert.That(uService.IsDisposed, Is.EqualTo(afService.IsDisposed));
+        Assert.That(uDep.IsDisposed, Is.EqualTo(afDep.IsDisposed));
+    }
+
+    [Test]
+    public void Singleton_StillResolvableAfterOwnedDisposal()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterSingleton<ITrackedService, TrackedService>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        var afBefore = afOwned.Value.Id;
+        afOwned.Dispose();
+        var afAfter = autofac.Resolve<ITrackedService>();
+
+        var uOwned = unity.Resolve<Owned<ITrackedService>>();
+        var uBefore = uOwned.Value.Id;
+        uOwned.Dispose();
+        var uAfter = unity.Resolve<ITrackedService>();
+
+        Assert.That(afAfter.Id, Is.EqualTo(afBefore));
+        Assert.That(uAfter.Id, Is.EqualTo(uBefore));
+        Assert.That(((TrackedService)afAfter).IsDisposed, Is.False);
+        Assert.That(((TrackedService)uAfter).IsDisposed, Is.EqualTo(((TrackedService)afAfter).IsDisposed));
+    }
+
+    [Test]
+    public void NamedRegistration_ResolvesCorrectly()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<NamedServiceA>().Keyed<INamedService>("a");
+        autofacBuilder.RegisterType<NamedServiceB>().Keyed<INamedService>("b");
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<INamedService, NamedServiceA>("a");
+        unity.RegisterType<INamedService, NamedServiceB>("b");
+
+        var afA = autofac.ResolveKeyed<Autofac.Features.OwnedInstances.Owned<INamedService>>("a");
+        var afB = autofac.ResolveKeyed<Autofac.Features.OwnedInstances.Owned<INamedService>>("b");
+
+        var uA = unity.Resolve<Owned<INamedService>>("a");
+        var uB = unity.Resolve<Owned<INamedService>>("b");
+
+        Assert.That(afA.Value.Label, Is.EqualTo("A"));
+        Assert.That(afB.Value.Label, Is.EqualTo("B"));
+        Assert.That(uA.Value.Label, Is.EqualTo(afA.Value.Label));
+        Assert.That(uB.Value.Label, Is.EqualTo(afB.Value.Label));
+
+        var afServiceA = (NamedServiceA)afA.Value;
+        var uServiceA = (NamedServiceA)uA.Value;
+        afA.Dispose();
+        uA.Dispose();
+
+        Assert.That(afServiceA.IsDisposed, Is.True);
+        Assert.That(uServiceA.IsDisposed, Is.EqualTo(afServiceA.IsDisposed));
+
+        // B should be unaffected
+        Assert.That(((NamedServiceB)afB.Value).IsDisposed, Is.False);
+        Assert.That(((NamedServiceB)uB.Value).IsDisposed, Is.EqualTo(((NamedServiceB)afB.Value).IsDisposed));
+
+        afB.Dispose();
+        uB.Dispose();
+    }
+
+    [Test]
+    public void TransientWithoutOwned_NotDisposedByContainer()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>();
+        autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
+
+        var afService1 = (TrackedService)autofac.Resolve<ITrackedService>();
+        var afService2 = (TrackedService)autofac.Resolve<ITrackedService>();
+        var afSvcWithDep = (ServiceWithDependency)autofac.Resolve<IServiceWithDependency>();
+        var afDep = (Dependency)afSvcWithDep.Dependency;
+
+        var uService1 = (TrackedService)unity.Resolve<ITrackedService>();
+        var uService2 = (TrackedService)unity.Resolve<ITrackedService>();
+        var uSvcWithDep = (ServiceWithDependency)unity.Resolve<IServiceWithDependency>();
+        var uDep = (Dependency)uSvcWithDep.Dependency;
+
+        // Transients resolved without Owned should not be disposed
+        Assert.That(afService1.IsDisposed, Is.False);
+        Assert.That(afService2.IsDisposed, Is.False);
+        Assert.That(afSvcWithDep.IsDisposed, Is.False);
+        Assert.That(afDep.IsDisposed, Is.False);
+
+        Assert.That(uService1.IsDisposed, Is.EqualTo(afService1.IsDisposed));
+        Assert.That(uService2.IsDisposed, Is.EqualTo(afService2.IsDisposed));
+        Assert.That(uSvcWithDep.IsDisposed, Is.EqualTo(afSvcWithDep.IsDisposed));
+        Assert.That(uDep.IsDisposed, Is.EqualTo(afDep.IsDisposed));
+    }
+
+    [Test]
+    public void TransientWithoutOwned_NotAffectedByOwnedDisposal()
+    {
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+
+        // Resolve transients directly (no Owned)
+        var afDirect = (TrackedService)autofac.Resolve<ITrackedService>();
+        var uDirect = (TrackedService)unity.Resolve<ITrackedService>();
+
+        // Resolve and dispose an Owned
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        afOwned.Dispose();
+        var uOwned = unity.Resolve<Owned<ITrackedService>>();
+        uOwned.Dispose();
+
+        // Direct transients must be unaffected
+        Assert.That(afDirect.IsDisposed, Is.False);
+        Assert.That(uDirect.IsDisposed, Is.EqualTo(afDirect.IsDisposed));
     }
 }

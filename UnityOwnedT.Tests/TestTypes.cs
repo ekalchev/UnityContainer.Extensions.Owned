@@ -107,6 +107,99 @@ public class ServiceWithSingletonDependency : IServiceWithSingletonDependency, I
     }
 }
 
+public interface IDeepRoot
+{
+    int Id { get; }
+    IDependency Dependency { get; }
+}
+
+public class DeepRoot : IDeepRoot, IDisposable
+{
+    private static int _nextId;
+    public int Id { get; } = Interlocked.Increment(ref _nextId);
+    public bool IsDisposed { get; private set; }
+    public IDependency Dependency { get; }
+
+    public DeepRoot(IDependency dependency)
+    {
+        Dependency = dependency;
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+    }
+
+    public static void ResetCounter() => Interlocked.Exchange(ref _nextId, 0);
+}
+
+public interface INonDisposableMiddle
+{
+    IDependency Dependency { get; }
+}
+
+public class NonDisposableMiddle : INonDisposableMiddle
+{
+    public IDependency Dependency { get; }
+
+    public NonDisposableMiddle(IDependency dependency)
+    {
+        Dependency = dependency;
+    }
+}
+
+public interface IServiceWithNonDisposableMiddle
+{
+    INonDisposableMiddle Middle { get; }
+}
+
+public class ServiceWithNonDisposableMiddle : IServiceWithNonDisposableMiddle, IDisposable
+{
+    public INonDisposableMiddle Middle { get; }
+    public bool IsDisposed { get; private set; }
+
+    public ServiceWithNonDisposableMiddle(INonDisposableMiddle middle)
+    {
+        Middle = middle;
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+    }
+}
+
+public interface INonDisposableService
+{
+    int Id { get; }
+}
+
+public class NonDisposableService : INonDisposableService
+{
+    private static int _nextId;
+    public int Id { get; } = Interlocked.Increment(ref _nextId);
+    public static void ResetCounter() => Interlocked.Exchange(ref _nextId, 0);
+}
+
+public interface INamedService
+{
+    string Label { get; }
+}
+
+public class NamedServiceA : INamedService, IDisposable
+{
+    public string Label => "A";
+    public bool IsDisposed { get; private set; }
+    public void Dispose() => IsDisposed = true;
+}
+
+public class NamedServiceB : INamedService, IDisposable
+{
+    public string Label => "B";
+    public bool IsDisposed { get; private set; }
+    public void Dispose() => IsDisposed = true;
+}
+
 public class DisposalCounter : IDisposable
 {
     public int DisposeCount { get; private set; }
