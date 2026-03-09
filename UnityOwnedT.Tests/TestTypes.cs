@@ -200,6 +200,72 @@ public class NamedServiceB : INamedService, IDisposable
     public void Dispose() => IsDisposed = true;
 }
 
+public interface IConfigurable
+{
+    string Host { get; }
+    int Port { get; }
+    IDependency Dependency { get; }
+}
+
+public class ConfigurableService : IConfigurable, IDisposable
+{
+    public string Host { get; set; } = "";
+    public int Port { get; set; }
+    public IDependency Dependency { get; set; } = null!;
+    public bool IsDisposed { get; private set; }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+    }
+}
+
+public interface IFieldInjected
+{
+    string Tag { get; }
+}
+
+public class FieldInjectedService : IFieldInjected, IDisposable
+{
+    [Unity.Dependency]
+    public string Tag = "";
+    public bool IsDisposed { get; private set; }
+
+    string IFieldInjected.Tag => Tag;
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+    }
+}
+
+public interface IMultiParamService
+{
+    string Name { get; }
+    int Count { get; }
+    IDependency Dependency { get; }
+}
+
+public class MultiParamService : IMultiParamService, IDisposable
+{
+    public string Name { get; }
+    public int Count { get; }
+    public IDependency Dependency { get; }
+    public bool IsDisposed { get; private set; }
+
+    public MultiParamService(string name, int count, IDependency dependency)
+    {
+        Name = name;
+        Count = count;
+        Dependency = dependency;
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+    }
+}
+
 public class DisposalCounter : IDisposable
 {
     public int DisposeCount { get; private set; }

@@ -13,8 +13,12 @@ internal class DisposalTrackingStrategy : BuilderStrategy
 
         if (context.Existing is IDisposable disposable)
         {
+            var type = context.Type;
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Owned<>))
+                return;
+
             var lm = context.Get(context.RegistrationType, context.Name, typeof(LifetimeManager));
-            if (lm is not ContainerControlledLifetimeManager)
+            if (lm is not ContainerControlledLifetimeManager and not ExternallyControlledLifetimeManager)
                 context.Lifetime.Add(disposable);
         }
     }

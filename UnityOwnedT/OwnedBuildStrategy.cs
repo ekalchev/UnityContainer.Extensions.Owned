@@ -29,6 +29,7 @@ public class OwnedBuildStrategy : BuilderStrategy
         }
 
         var child = context.Container.CreateChildContainer();
+        context.Lifetime.Remove(child);
         var previous = IsInsideOwnedScope.Value;
         IsInsideOwnedScope.Value = true;
 
