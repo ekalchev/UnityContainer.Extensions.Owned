@@ -519,3 +519,58 @@ public class ServiceWithExternalDep : IServiceWithExternalDep, IDisposable
 
     public void Dispose() => IsDisposed = true;
 }
+
+// Struct types for value type tests
+public interface IValueService
+{
+    int Id { get; }
+    string Name { get; }
+}
+
+public struct ValueService : IValueService
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+
+    public ValueService(int id, string name)
+    {
+        Id = id;
+        Name = name;
+    }
+}
+
+public struct SimpleStruct
+{
+    public int Value { get; set; }
+}
+
+public struct DisposableStruct : IDisposable
+{
+    public bool IsDisposed { get; private set; }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+    }
+}
+
+public interface IServiceWithStructDep
+{
+    IValueService StructDep { get; }
+    IDependency ClassDep { get; }
+}
+
+public class ServiceWithStructDep : IServiceWithStructDep, IDisposable
+{
+    public IValueService StructDep { get; }
+    public IDependency ClassDep { get; }
+    public bool IsDisposed { get; private set; }
+
+    public ServiceWithStructDep(IValueService structDep, IDependency classDep)
+    {
+        StructDep = structDep;
+        ClassDep = classDep;
+    }
+
+    public void Dispose() => IsDisposed = true;
+}

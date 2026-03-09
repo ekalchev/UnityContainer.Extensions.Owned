@@ -3208,4 +3208,196 @@ public class OwnedBehaviorTests
         owned2.Dispose();
         Assert.That(svcB.IsDisposed, Is.True);
     }
+
+    [Test]
+    public void ConstructorThrows_OriginalExceptionTypeIsPreserved()
+    {
+        // The original InvalidOperationException thrown by FailingService's constructor
+        // should be preserved in the exception chain of ResolutionFailedException.
+        // Unity wraps it in TargetInvocationException (from ConstructorInfo.Invoke).
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IFailingService, FailingService>();
+
+        var ex = Assert.Throws<ResolutionFailedException>(() =>
+            unity.Resolve<Owned<IFailingService>>());
+
+        var inner = GetRootCause(ex!);
+
+        Assert.That(inner, Is.TypeOf<InvalidOperationException>());
+        Assert.That(inner!.Message, Is.EqualTo("Construction failed"));
+    }
+
+    [Test]
+    public void ConstructorThrows_SameExceptionBehaviorAsNonOwned()
+    {
+        // Owned<T> should propagate exceptions the same way as resolving T directly
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IFailingService, FailingService>();
+
+        var directEx = Assert.Throws<ResolutionFailedException>(() =>
+            unity.Resolve<IFailingService>());
+
+        var ownedEx = Assert.Throws<ResolutionFailedException>(() =>
+            unity.Resolve<Owned<IFailingService>>());
+
+        var directRoot = GetRootCause(directEx!);
+        var ownedRoot = GetRootCause(ownedEx!);
+
+        Assert.That(ownedRoot, Is.TypeOf(directRoot!.GetType()));
+        Assert.That(ownedRoot!.Message, Is.EqualTo(directRoot.Message));
+    }
+
+    private static Exception? GetRootCause(Exception ex)
+    {
+        var current = ex;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+        return current;
+    }
+
+    // --- Struct (value type) tests ---
+    // Note: Unity cannot resolve structs via RegisterType (InvalidRegistrationException).
+    // Structs must be registered via RegisterFactory or RegisterInstance.
+
+    [Test]
+    public void Struct_OwnedResolvesFactoryRegisteredStruct()
+    {
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<IValueService>(c => new ValueService(42, "test"));
+
+        var owned = unity.Resolve<Owned<IValueService>>();
+
+        Assert.That(owned.Value, Is.InstanceOf<ValueService>());
+        Assert.That(owned.Value.Id, Is.EqualTo(42));
+        Assert.That(owned.Value.Name, Is.EqualTo("test"));
+        owned.Dispose();
+    }
+
+    [Test]
+    public void Struct_EachResolveProducesNewScope()
+    {
+        int counter = 0;
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<SimpleStruct>(c => new SimpleStruct { Value = Interlocked.Increment(ref counter) });
+
+        var owned1 = unity.Resolve<Owned<SimpleStruct>>();
+        var owned2 = unity.Resolve<Owned<SimpleStruct>>();
+
+        Assert.That(owned1.Value.Value, Is.Not.EqualTo(owned2.Value.Value));
+
+        owned1.Dispose();
+        owned2.Dispose();
+    }
+
+    [Test]
+    public void Struct_ValuePropertyReturnsSameValueEveryTime()
+    {
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<IValueService>(c => new ValueService(1, "stable"));
+
+        var owned = unity.Resolve<Owned<IValueService>>();
+        IValueService first = owned.Value;
+        IValueService second = owned.Value;
+
+        Assert.That(first, Is.EqualTo(second));
+        owned.Dispose();
+    }
+
+    [Test]
+    public void Struct_DisposableStruct_FactoryRegistered()
+    {
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<DisposableStruct>(c => new DisposableStruct());
+
+        var owned = unity.Resolve<Owned<DisposableStruct>>();
+
+        Assert.That(owned.Value, Is.TypeOf<DisposableStruct>());
+        // Value type: Dispose on the boxed copy in the scope won't affect the unboxed
+        // copy stored in Owned<T>.Value — this is expected value type semantics.
+        Assert.DoesNotThrow(() => owned.Dispose());
+    }
+
+    [Test]
+    public void Struct_DisposeDoesNotThrow()
+    {
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<IValueService>(c => new ValueService(1, "x"));
+
+        var owned = unity.Resolve<Owned<IValueService>>();
+        Assert.DoesNotThrow(() => owned.Dispose());
+    }
+
+    [Test]
+    public void Struct_MixedStructAndClassDependencies()
+    {
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<IValueService>(c => new ValueService(7, "mixed"));
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IServiceWithStructDep, ServiceWithStructDep>();
+
+        var owned = unity.Resolve<Owned<IServiceWithStructDep>>();
+        ServiceWithStructDep svc = (ServiceWithStructDep)owned.Value;
+        Dependency classDep = (Dependency)svc.ClassDep;
+
+        Assert.That(svc.StructDep, Is.InstanceOf<ValueService>());
+        Assert.That(svc.StructDep.Id, Is.EqualTo(7));
+        Assert.That(classDep.IsDisposed, Is.False);
+
+        owned.Dispose();
+
+        Assert.That(svc.IsDisposed, Is.True);
+        Assert.That(classDep.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void Struct_ConcreteStructType_FactoryRegistered()
+    {
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<SimpleStruct>(c => new SimpleStruct { Value = 99 });
+
+        var owned = unity.Resolve<Owned<SimpleStruct>>();
+
+        Assert.That(owned.Value, Is.TypeOf<SimpleStruct>());
+        Assert.That(owned.Value.Value, Is.EqualTo(99));
+        owned.Dispose();
+    }
+
+    [Test]
+    public void Struct_MultipleOwnedStructs_IndependentScopes()
+    {
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<IValueService>(c => new ValueService(1, "scope"));
+
+        var owned1 = unity.Resolve<Owned<IValueService>>();
+        var owned2 = unity.Resolve<Owned<IValueService>>();
+
+        owned1.Dispose();
+        Assert.DoesNotThrow(() => { IValueService v = owned2.Value; });
+
+        owned2.Dispose();
+    }
+
+    [Test]
+    public void Struct_RegisterType_ThrowsSameAsNonOwned()
+    {
+        // Unity itself cannot resolve structs via RegisterType — verify Owned<T> behaves the same
+        using var unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IValueService, ValueService>();
+
+        Assert.Throws<ResolutionFailedException>(() => unity.Resolve<IValueService>());
+        Assert.Throws<ResolutionFailedException>(() => unity.Resolve<Owned<IValueService>>());
+    }
 }
