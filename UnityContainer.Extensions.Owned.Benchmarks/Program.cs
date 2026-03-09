@@ -3,10 +3,18 @@ using System.Reflection;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using FastExpressionCompiler;
+using Unity;
 using UnityContainer.Extensions.Owned;
 
-BenchmarkRunner.Run<OwnedCreationBenchmark>();
+BenchmarkRunner.Run(new[]
+{
+    typeof(OwnedCreationBenchmark),
+    typeof(ExtensionOverheadBenchmark)
+});
 
+/// <summary>
+/// Benchmarks different ways to construct Owned&lt;T&gt; instances.
+/// </summary>
 [MemoryDiagnoser]
 public class OwnedCreationBenchmark
 {
@@ -81,5 +89,102 @@ public class OwnedCreationBenchmark
     {
         public static readonly NoOpScope Instance = new();
         public void Dispose() { }
+    }
+}
+
+/// <summary>
+/// Measures the overhead of having OwnedExtension registered on non-Owned resolutions.
+/// Compares resolving plain types with and without the extension to quantify pipeline cost.
+/// </summary>
+[MemoryDiagnoser]
+public class ExtensionOverheadBenchmark
+{
+    private Unity.UnityContainer containerWithout = null!;
+    private Unity.UnityContainer containerWith = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        containerWithout = new Unity.UnityContainer();
+        containerWithout.RegisterType<ISimpleService, SimpleService>();
+        containerWithout.RegisterType<IServiceWithDep, ServiceWithDep>();
+
+        containerWith = new Unity.UnityContainer();
+        containerWith.AddExtension(new OwnedExtension());
+        containerWith.RegisterType<ISimpleService, SimpleService>();
+        containerWith.RegisterType<IServiceWithDep, ServiceWithDep>();
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        containerWithout.Dispose();
+        containerWith.Dispose();
+    }
+
+    // --- Simple transient (no dependencies) ---
+
+    [Benchmark(Baseline = true)]
+    public object Transient_WithoutExtension()
+    {
+        return containerWithout.Resolve<ISimpleService>();
+    }
+
+    [Benchmark]
+    public object Transient_WithExtension()
+    {
+        return containerWith.Resolve<ISimpleService>();
+    }
+
+    // --- Transient with one dependency ---
+
+    [Benchmark]
+    public object TransientWithDep_WithoutExtension()
+    {
+        return containerWithout.Resolve<IServiceWithDep>();
+    }
+
+    [Benchmark]
+    public object TransientWithDep_WithExtension()
+    {
+        return containerWith.Resolve<IServiceWithDep>();
+    }
+
+    // --- Owned<T> resolution (only available with extension) ---
+
+    [Benchmark]
+    public object OwnedTransient_WithExtension()
+    {
+        var owned = containerWith.Resolve<Owned<ISimpleService>>();
+        owned.Dispose();
+        return owned;
+    }
+
+    [Benchmark]
+    public object OwnedTransientWithDep_WithExtension()
+    {
+        var owned = containerWith.Resolve<Owned<IServiceWithDep>>();
+        owned.Dispose();
+        return owned;
+    }
+}
+
+// Benchmark helper types
+public interface ISimpleService { }
+
+public class SimpleService : ISimpleService { }
+
+public interface IServiceWithDep
+{
+    ISimpleService Dependency { get; }
+}
+
+public class ServiceWithDep : IServiceWithDep
+{
+    public ISimpleService Dependency { get; }
+
+    public ServiceWithDep(ISimpleService dependency)
+    {
+        Dependency = dependency;
     }
 }
