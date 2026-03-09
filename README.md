@@ -1,8 +1,17 @@
-# UnityOwnedT
+# Unity.Extensions.Owned
+
+[![NuGet](https://img.shields.io/nuget/v/Unity.Extensions.Owned.svg)](https://www.nuget.org/packages/Unity.Extensions.Owned)
+[![CI](https://github.com/ekalchev/Unity.Extensions.Owned/actions/workflows/ci.yml/badge.svg)](https://github.com/ekalchev/Unity.Extensions.Owned/actions/workflows/ci.yml)
 
 Autofac-style `Owned<T>` for [Unity Container](https://github.com/unitycontainer/unity) (v5.11.x).
 
 `Owned<T>` gives you **deterministic disposal** of resolved services and their entire dependency graph. Each `Owned<T>` creates an isolated scope — when you dispose it, all transient and hierarchical dependencies created within that scope are disposed with it.
+
+## Install
+
+```
+dotnet add package Unity.Extensions.Owned
+```
 
 ## Usage
 
@@ -10,7 +19,7 @@ Autofac-style `Owned<T>` for [Unity Container](https://github.com/unitycontainer
 
 ```csharp
 using Unity;
-using UnityOwnedT;
+using Unity.Extensions.Owned;
 
 var container = new UnityContainer();
 container.AddExtension(new OwnedExtension());
@@ -37,21 +46,21 @@ owned.Dispose();
 ```csharp
 public class MyService : IDisposable
 {
-    private readonly Owned<IRepository> _ownedRepo;
+    private readonly Owned<IRepository> ownedRepo;
 
     public MyService(Owned<IRepository> ownedRepo)
     {
-        _ownedRepo = ownedRepo;
+        this.ownedRepo = ownedRepo;
     }
 
     public void DoWork()
     {
-        _ownedRepo.Value.Save("data");
+        ownedRepo.Value.Save("data");
     }
 
     public void Dispose()
     {
-        _ownedRepo.Dispose(); // Disposes the repository and its scope
+        ownedRepo.Dispose(); // Disposes the repository and its scope
     }
 }
 ```
@@ -90,7 +99,7 @@ An `OwnedScopeMarker` registered on the child container is used to detect whethe
 
 ## Tests
 
-The test suite (109 tests) validates behavior against Autofac's `Owned<T>` side-by-side to ensure identical semantics. Run with:
+The test suite validates behavior against Autofac's `Owned<T>` side-by-side to ensure identical semantics. Run with:
 
 ```
 dotnet test

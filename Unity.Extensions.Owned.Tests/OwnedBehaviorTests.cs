@@ -5,7 +5,7 @@ using NUnit.Framework;
 using Unity;
 using Unity.Resolution;
 
-namespace UnityOwnedT.Tests;
+namespace Unity.Extensions.Owned.Tests;
 
 [TestFixture]
 public class OwnedBehaviorTests

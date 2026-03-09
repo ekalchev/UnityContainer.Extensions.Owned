@@ -2,7 +2,7 @@ using NUnit.Framework;
 using Unity;
 using Unity.Lifetime;
 
-namespace UnityOwnedT.Tests;
+namespace Unity.Extensions.Owned.Tests;
 
 [TestFixture]
 public class LifetimeManagerTests

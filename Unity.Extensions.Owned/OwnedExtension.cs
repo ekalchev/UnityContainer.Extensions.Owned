@@ -1,7 +1,7 @@
 using Unity.Builder;
 using Unity.Extension;
 
-namespace UnityOwnedT;
+namespace Unity.Extensions.Owned;
 
 public class OwnedExtension : UnityContainerExtension
 {

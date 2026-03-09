@@ -15,7 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\UnityOwnedT\UnityOwnedT.csproj" />
+    <ProjectReference Include="..\Unity.Extensions.Owned\Unity.Extensions.Owned.csproj" />
   </ItemGroup>
 
 </Project>

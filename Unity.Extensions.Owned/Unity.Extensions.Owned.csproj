@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <PackageId>Unity.Extensions.Owned</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Emil Kalchev</Authors>
+    <Description>Autofac-style Owned&lt;T&gt; for Unity Container — deterministic disposal of resolved services and their dependency graphs via isolated scopes.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageTags>unity;dependency-injection;owned;disposal;scope;ioc</PackageTags>
+    <RepositoryUrl>https://github.com/ekalchev/Unity.Extensions.Owned</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Unity" Version="5.11.10" />
+  </ItemGroup>
+
+</Project>

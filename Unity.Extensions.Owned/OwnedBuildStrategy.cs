@@ -1,10 +1,9 @@
 using System.Reflection;
-using Unity;
 using Unity.Builder;
 using Unity.Lifetime;
 using Unity.Strategies;
 
-namespace UnityOwnedT;
+namespace Unity.Extensions.Owned;
 
 public class OwnedBuildStrategy : BuilderStrategy
 {
