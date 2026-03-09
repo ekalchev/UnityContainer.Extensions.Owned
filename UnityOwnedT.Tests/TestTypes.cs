@@ -472,3 +472,50 @@ public class ServiceWithDependency : IServiceWithDependency, IDisposable
 
     public static void ResetCounter() => Interlocked.Exchange(ref _nextId, 0);
 }
+
+// Service with three different lifetime dependencies
+public interface ITripleLifetimeService
+{
+    ITrackedService SingletonDep { get; }
+    ISharedLeaf HierarchicalDep { get; }
+    IDependency TransientDep { get; }
+}
+
+public class TripleLifetimeService : ITripleLifetimeService, IDisposable
+{
+    public ITrackedService SingletonDep { get; }
+    public ISharedLeaf HierarchicalDep { get; }
+    public IDependency TransientDep { get; }
+    public bool IsDisposed { get; private set; }
+
+    public TripleLifetimeService(ITrackedService singletonDep, ISharedLeaf hierarchicalDep, IDependency transientDep)
+    {
+        SingletonDep = singletonDep;
+        HierarchicalDep = hierarchicalDep;
+        TransientDep = transientDep;
+    }
+
+    public void Dispose() => IsDisposed = true;
+}
+
+// Service with ExternallyControlled dependency
+public interface IServiceWithExternalDep
+{
+    IDependency ExternalDep { get; }
+    ITrackedService TransientDep { get; }
+}
+
+public class ServiceWithExternalDep : IServiceWithExternalDep, IDisposable
+{
+    public IDependency ExternalDep { get; }
+    public ITrackedService TransientDep { get; }
+    public bool IsDisposed { get; private set; }
+
+    public ServiceWithExternalDep(IDependency externalDep, ITrackedService transientDep)
+    {
+        ExternalDep = externalDep;
+        TransientDep = transientDep;
+    }
+
+    public void Dispose() => IsDisposed = true;
+}
