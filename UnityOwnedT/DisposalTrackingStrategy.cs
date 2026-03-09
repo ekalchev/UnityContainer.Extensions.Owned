@@ -6,20 +6,25 @@ namespace UnityOwnedT;
 
 internal class DisposalTrackingStrategy : BuilderStrategy
 {
+    private static readonly Type OwnedScopeMarkerType = typeof(OwnedScopeMarker);
+    private static readonly Type LifetimeManagerType = typeof(LifetimeManager);
+    private static readonly Type OwnedOpenGenericType = typeof(Owned<>);
+
     public override void PostBuildUp(ref BuilderContext context)
     {
-        if (!OwnedBuildStrategy.IsInsideOwnedScope.Value)
+        // IDisposable check is a single IL isinst — cheaper than context.Get dictionary lookup
+        if (context.Existing is not IDisposable disposable)
             return;
 
-        if (context.Existing is IDisposable disposable)
-        {
-            var type = context.Type;
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Owned<>))
-                return;
+        if (context.Get(OwnedScopeMarkerType, null, LifetimeManagerType) is null)
+            return;
 
-            var lm = context.Get(context.RegistrationType, context.Name, typeof(LifetimeManager));
-            if (lm is not ContainerControlledLifetimeManager and not ExternallyControlledLifetimeManager)
-                context.Lifetime.Add(disposable);
-        }
+        var type = context.Type;
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == OwnedOpenGenericType)
+            return;
+
+        var lm = context.Get(context.RegistrationType, context.Name, LifetimeManagerType);
+        if (lm is not ContainerControlledLifetimeManager and not ExternallyControlledLifetimeManager)
+            context.Lifetime.Add(disposable);
     }
 }

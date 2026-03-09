@@ -8,36 +8,35 @@ namespace UnityOwnedT;
 
 public class OwnedBuildStrategy : BuilderStrategy
 {
-    internal static readonly AsyncLocal<bool> IsInsideOwnedScope = new();
+    private static readonly Type OwnedOpenGenericType = typeof(Owned<>);
+    private static readonly Type LifetimeManagerType = typeof(LifetimeManager);
+    private static readonly BindingFlags CtorFlags = BindingFlags.Instance | BindingFlags.NonPublic;
 
     public override void PreBuildUp(ref BuilderContext context)
     {
         var type = context.Type;
 
-        if (!type.IsGenericType || type.GetGenericTypeDefinition() != typeof(Owned<>))
+        if (!type.IsGenericType || type.GetGenericTypeDefinition() != OwnedOpenGenericType)
             return;
 
         var innerType = type.GetGenericArguments()[0];
 
-        if (context.Get(innerType, context.Name, typeof(LifetimeManager)) is ContainerControlledLifetimeManager)
+        if (context.Get(innerType, context.Name, LifetimeManagerType) is ContainerControlledLifetimeManager)
         {
             var singleton = context.Container.Resolve(innerType, context.Name);
-            var owned = CreateOwned(type, singleton, NoOpScope.Instance);
-            context.Existing = owned;
+            context.Existing = CreateOwned(type, singleton, NoOpScope.Instance);
             context.BuildComplete = true;
             return;
         }
 
         var child = context.Container.CreateChildContainer();
         context.Lifetime.Remove(child);
-        var previous = IsInsideOwnedScope.Value;
-        IsInsideOwnedScope.Value = true;
+        child.RegisterInstance(OwnedScopeMarker.Instance);
 
         try
         {
             var resolved = child.Resolve(innerType, context.Name, context.Overrides);
-            var owned = CreateOwned(type, resolved, (IDisposable)child);
-            context.Existing = owned;
+            context.Existing = CreateOwned(type, resolved, (IDisposable)child);
             context.BuildComplete = true;
         }
         catch
@@ -45,23 +44,19 @@ public class OwnedBuildStrategy : BuilderStrategy
             child.Dispose();
             throw;
         }
-        finally
-        {
-            IsInsideOwnedScope.Value = previous;
-        }
     }
 
     private static object CreateOwned(Type ownedType, object value, IDisposable scope) =>
-        Activator.CreateInstance(
-            ownedType,
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            null,
-            new[] { value, scope },
-            null)!;
+        Activator.CreateInstance(ownedType, CtorFlags, null, [value, scope], null)!;
 
     private sealed class NoOpScope : IDisposable
     {
         public static readonly NoOpScope Instance = new();
         public void Dispose() { }
     }
+}
+
+internal sealed class OwnedScopeMarker
+{
+    public static readonly OwnedScopeMarker Instance = new();
 }

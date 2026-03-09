@@ -7,7 +7,7 @@ internal class Program
     {
         using var container = new UnityContainer();
         container.AddExtension(new OwnedExtension());
-        container.RegisterSingleton<IRepository, Repository>();
+        container.RegisterType<IRepository, Repository>();
         container.RegisterType<IService, Service>();
 
         Console.WriteLine("=== Demo 1: Owned<IRepository> resolved directly ===");
