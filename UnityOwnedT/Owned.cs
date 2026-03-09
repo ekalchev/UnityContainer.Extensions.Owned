@@ -2,18 +2,18 @@ namespace UnityOwnedT;
 
 public sealed class Owned<T> : IDisposable
 {
-    private readonly IDisposable _scope;
+    private readonly IDisposable scope;
 
     public T Value { get; }
 
     internal Owned(T value, IDisposable scope)
     {
         Value = value;
-        _scope = scope;
+        this.scope = scope;
     }
 
     public void Dispose()
     {
-        _scope.Dispose();
+        scope.Dispose();
     }
 }

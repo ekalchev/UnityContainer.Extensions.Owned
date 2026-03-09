@@ -4,14 +4,6 @@ Autofac-style `Owned<T>` for [Unity Container](https://github.com/unitycontainer
 
 `Owned<T>` gives you **deterministic disposal** of resolved services and their entire dependency graph. Each `Owned<T>` creates an isolated scope — when you dispose it, all transient and hierarchical dependencies created within that scope are disposed with it.
 
-## Installation
-
-Add a reference to the `UnityOwnedT` project (or copy the four source files into your project).
-
-Requires:
-- Unity Container 5.11.x
-- .NET 10+ (retarget the csproj as needed)
-
 ## Usage
 
 ### Register the extension
