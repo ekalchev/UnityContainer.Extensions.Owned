@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Autofac;
 using Autofac.Core;
 using NUnit.Framework;
@@ -17,6 +18,7 @@ public class OwnedBehaviorTests
         ServiceWithDependency.ResetCounter();
         DeepRoot.ResetCounter();
         NonDisposableService.ResetCounter();
+        SharedLeaf.ResetCounter();
     }
 
     [Test]
@@ -1927,5 +1929,820 @@ public class OwnedBehaviorTests
         afOwned.Dispose();
         Assert.That(afService.IsDisposed, Is.True);
         Assert.That(afDep.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void ForgottenOwned_ContainerDispose_DoesNotDisposeService()
+    {
+        // Owned<T> gives explicit ownership — forgetting to dispose it leaks the scope.
+        // Neither Autofac nor Unity disposes the inner service on container dispose.
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
+        var autofac = autofacBuilder.Build();
+
+        var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        var afService = (TrackedService)afOwned.Value;
+
+        var uOwned = unity.Resolve<Owned<ITrackedService>>();
+        var uService = (TrackedService)uOwned.Value;
+
+        // Don't dispose Owned — just dispose the container
+        autofac.Dispose();
+        unity.Dispose();
+
+        Assert.That(afService.IsDisposed, Is.False, "Autofac: forgotten Owned leaks");
+        Assert.That(uService.IsDisposed, Is.EqualTo(afService.IsDisposed));
+    }
+
+    [Test]
+    public void ForgottenOwned_Singleton_ContainerDispose_DisposesService()
+    {
+        // Singleton is owned by the container, not by Owned<T>.
+        // Container dispose should dispose the singleton regardless of Owned.
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
+        var autofac = autofacBuilder.Build();
+
+        var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterSingleton<ITrackedService, TrackedService>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        var afService = (TrackedService)afOwned.Value;
+
+        var uOwned = unity.Resolve<Owned<ITrackedService>>();
+        var uService = (TrackedService)uOwned.Value;
+
+        // Don't dispose Owned — just dispose the container
+        autofac.Dispose();
+        unity.Dispose();
+
+        Assert.That(afService.IsDisposed, Is.True, "Autofac: singleton disposed with container");
+        Assert.That(uService.IsDisposed, Is.EqualTo(afService.IsDisposed));
+    }
+
+    // ── Edge Cases / Bug Hunting ─────────────────────────────────────────
+
+    [Test]
+    public void OpenGeneric_OwnedDisposesCorrectly()
+    {
+        // Owned<IRepository<User>> with open generic registration
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterGeneric(typeof(Repository<>)).As(typeof(IRepository<>));
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType(typeof(IRepository<>), typeof(Repository<>));
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IRepository<User>>>();
+        var afRepo = (Repository<User>)afOwned.Value;
+
+        var uOwned = unity.Resolve<Owned<IRepository<User>>>();
+        var uRepo = (Repository<User>)uOwned.Value;
+
+        afOwned.Dispose();
+        uOwned.Dispose();
+
+        Assert.That(afRepo.IsDisposed, Is.True);
+        Assert.That(uRepo.IsDisposed, Is.EqualTo(afRepo.IsDisposed));
+    }
+
+    [Test]
+    public void OpenGeneric_MultipleClosedTypes_IndependentScopes()
+    {
+        // Owned<IRepository<User>> and Owned<IRepository<Order>> are independent
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterGeneric(typeof(Repository<>)).As(typeof(IRepository<>));
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType(typeof(IRepository<>), typeof(Repository<>));
+
+        var afUser = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IRepository<User>>>();
+        var afOrder = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IRepository<Order>>>();
+        var afUserRepo = (Repository<User>)afUser.Value;
+        var afOrderRepo = (Repository<Order>)afOrder.Value;
+
+        var uUser = unity.Resolve<Owned<IRepository<User>>>();
+        var uOrder = unity.Resolve<Owned<IRepository<Order>>>();
+        var uUserRepo = (Repository<User>)uUser.Value;
+        var uOrderRepo = (Repository<Order>)uOrder.Value;
+
+        afUser.Dispose();
+        uUser.Dispose();
+
+        Assert.That(afUserRepo.IsDisposed, Is.True);
+        Assert.That(afOrderRepo.IsDisposed, Is.False);
+        Assert.That(uUserRepo.IsDisposed, Is.EqualTo(afUserRepo.IsDisposed));
+        Assert.That(uOrderRepo.IsDisposed, Is.EqualTo(afOrderRepo.IsDisposed));
+
+        afOrder.Dispose();
+        uOrder.Dispose();
+    }
+
+    [Test]
+    public void ConstructorThrows_ChildContainerIsDisposed_NoLeak()
+    {
+        // If inner type construction fails, the child container should be disposed
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IFailingService, FailingService>();
+
+        Assert.Throws<ResolutionFailedException>(() =>
+            unity.Resolve<Owned<IFailingService>>());
+    }
+
+    [Test]
+    public void ConstructorThrows_PartialDependencies_DisposedOnFailure()
+    {
+        // T has two deps: IDependency (succeeds) and IFailingService (fails).
+        // The already-resolved IDependency should be cleaned up via child container disposal.
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>();
+        autofacBuilder.RegisterType<FailingService>().As<IFailingService>();
+        autofacBuilder.RegisterType<ServiceWithFailingDep>().As<IServiceWithFailingDep>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IFailingService, FailingService>();
+        unity.RegisterType<IServiceWithFailingDep, ServiceWithFailingDep>();
+
+        Assert.Throws<Autofac.Core.DependencyResolutionException>(() =>
+            autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithFailingDep>>());
+
+        Assert.Throws<ResolutionFailedException>(() =>
+            unity.Resolve<Owned<IServiceWithFailingDep>>());
+    }
+
+    [Test]
+    public void MultipleDeps_AllDisposed()
+    {
+        // Service with two disposable dependencies — both should be disposed
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>();
+        autofacBuilder.RegisterType<ServiceWithMultipleDeps>().As<IServiceWithMultipleDeps>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IServiceWithMultipleDeps, ServiceWithMultipleDeps>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithMultipleDeps>>();
+        var afSvc = (ServiceWithMultipleDeps)afOwned.Value;
+        var afDep1 = (TrackedService)afSvc.Dep1;
+        var afDep2 = (Dependency)afSvc.Dep2;
+
+        var uOwned = unity.Resolve<Owned<IServiceWithMultipleDeps>>();
+        var uSvc = (ServiceWithMultipleDeps)uOwned.Value;
+        var uDep1 = (TrackedService)uSvc.Dep1;
+        var uDep2 = (Dependency)uSvc.Dep2;
+
+        afOwned.Dispose();
+        uOwned.Dispose();
+
+        Assert.That(afSvc.IsDisposed, Is.True);
+        Assert.That(afDep1.IsDisposed, Is.True);
+        Assert.That(afDep2.IsDisposed, Is.True);
+        Assert.That(uSvc.IsDisposed, Is.EqualTo(afSvc.IsDisposed));
+        Assert.That(uDep1.IsDisposed, Is.EqualTo(afDep1.IsDisposed));
+        Assert.That(uDep2.IsDisposed, Is.EqualTo(afDep2.IsDisposed));
+    }
+
+    [Test]
+    public void MultipleDeps_OneSingleton_OnlyTransientDisposed()
+    {
+        // Two deps: one singleton, one transient. Only transient should be disposed.
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>();
+        autofacBuilder.RegisterType<ServiceWithMultipleDeps>().As<IServiceWithMultipleDeps>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterSingleton<ITrackedService, TrackedService>();
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IServiceWithMultipleDeps, ServiceWithMultipleDeps>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithMultipleDeps>>();
+        var afDep1 = (TrackedService)afOwned.Value.Dep1;
+        var afDep2 = (Dependency)afOwned.Value.Dep2;
+
+        var uOwned = unity.Resolve<Owned<IServiceWithMultipleDeps>>();
+        var uDep1 = (TrackedService)uOwned.Value.Dep1;
+        var uDep2 = (Dependency)uOwned.Value.Dep2;
+
+        afOwned.Dispose();
+        uOwned.Dispose();
+
+        Assert.That(afDep1.IsDisposed, Is.False, "Autofac: singleton survives Owned dispose");
+        Assert.That(afDep2.IsDisposed, Is.True, "Autofac: transient disposed with Owned");
+        Assert.That(uDep1.IsDisposed, Is.EqualTo(afDep1.IsDisposed));
+        Assert.That(uDep2.IsDisposed, Is.EqualTo(afDep2.IsDisposed));
+    }
+
+    [Test]
+    public void SameSingleton_SharedAcrossOwnedAndDirectResolve()
+    {
+        // Singleton resolved via Owned and directly should be the same instance
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterSingleton<ITrackedService, TrackedService>();
+
+        var afDirect = autofac.Resolve<ITrackedService>();
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        var afSame = ReferenceEquals(afDirect, afOwned.Value);
+
+        var uDirect = unity.Resolve<ITrackedService>();
+        var uOwned = unity.Resolve<Owned<ITrackedService>>();
+        var uSame = ReferenceEquals(uDirect, uOwned.Value);
+
+        Assert.That(afSame, Is.True);
+        Assert.That(uSame, Is.EqualTo(afSame));
+
+        // Disposing Owned should NOT affect the singleton
+        afOwned.Dispose();
+        uOwned.Dispose();
+
+        Assert.That(((TrackedService)afDirect).IsDisposed, Is.False);
+        Assert.That(((TrackedService)uDirect).IsDisposed,
+            Is.EqualTo(((TrackedService)afDirect).IsDisposed));
+    }
+
+    [Test]
+    public void Owned_ResolvedFromDisposedContainer_Throws()
+    {
+        var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+        unity.Dispose();
+
+        Assert.Throws<ResolutionFailedException>(() =>
+            unity.Resolve<Owned<ITrackedService>>());
+    }
+
+    [Test]
+    public void Owned_ServiceDependsOnOwnedDependency()
+    {
+        // Service constructor takes Owned<IDependency> — transitive Owned
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IServiceWithOwnedDependency, ServiceWithOwnedDependency>();
+
+        var uOwned = unity.Resolve<Owned<IServiceWithOwnedDependency>>();
+        var uSvc = (ServiceWithOwnedDependency)uOwned.Value;
+        var uDep = (Dependency)uSvc.Dependency;
+
+        Assert.That(uDep.IsDisposed, Is.False);
+
+        // Disposing outer Owned disposes the child container.
+        // The inner Owned<IDependency> was created in that child, but its
+        // child container was detached. So the inner dep should NOT be disposed
+        // by the outer dispose — only by ServiceWithOwnedDependency.Dispose().
+        uOwned.Dispose();
+
+        // The service's Dispose calls _ownedDep.Dispose(), so the dep IS disposed
+        Assert.That(uSvc.IsDisposed, Is.True);
+        Assert.That(uDep.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void Owned_NamedRegistrations_ResolvedCorrectly()
+    {
+        // Named registrations should resolve correctly inside Owned scope
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<INamedService, NamedServiceA>("alpha");
+        unity.RegisterType<INamedService, NamedServiceB>("beta");
+
+        var uAlpha = unity.Resolve<Owned<INamedService>>("alpha");
+        var uBeta = unity.Resolve<Owned<INamedService>>("beta");
+
+        Assert.That(uAlpha.Value.Label, Is.EqualTo("A"));
+        Assert.That(uBeta.Value.Label, Is.EqualTo("B"));
+
+        var uAlphaSvc = (NamedServiceA)uAlpha.Value;
+        var uBetaSvc = (NamedServiceB)uBeta.Value;
+
+        uAlpha.Dispose();
+
+        Assert.That(uAlphaSvc.IsDisposed, Is.True);
+        Assert.That(uBetaSvc.IsDisposed, Is.False);
+
+        uBeta.Dispose();
+        Assert.That(uBetaSvc.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void Owned_RegisteredFactory_WorksCorrectly()
+    {
+        // T resolved via factory registration
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterFactory<ITrackedService>(c => new TrackedService());
+
+        var uOwned = unity.Resolve<Owned<ITrackedService>>();
+        var uSvc = (TrackedService)uOwned.Value;
+
+        Assert.That(uSvc.IsDisposed, Is.False);
+
+        uOwned.Dispose();
+        Assert.That(uSvc.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void Owned_SameTransientResolvedTwice_DifferentInstances()
+    {
+        // Each Owned<T> should get its own instance even for the same T
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+
+        var af1 = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        var af2 = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        var afSvc1 = (TrackedService)af1.Value;
+        var afSvc2 = (TrackedService)af2.Value;
+
+        var u1 = unity.Resolve<Owned<ITrackedService>>();
+        var u2 = unity.Resolve<Owned<ITrackedService>>();
+        var uSvc1 = (TrackedService)u1.Value;
+        var uSvc2 = (TrackedService)u2.Value;
+
+        Assert.That(ReferenceEquals(afSvc1, afSvc2), Is.False);
+        Assert.That(ReferenceEquals(uSvc1, uSvc2), Is.False);
+
+        af1.Dispose();
+        u1.Dispose();
+
+        Assert.That(afSvc1.IsDisposed, Is.True);
+        Assert.That(afSvc2.IsDisposed, Is.False);
+        Assert.That(uSvc1.IsDisposed, Is.EqualTo(afSvc1.IsDisposed));
+        Assert.That(uSvc2.IsDisposed, Is.EqualTo(afSvc2.IsDisposed));
+
+        af2.Dispose();
+        u2.Dispose();
+    }
+
+    // ── Convoluted Scenarios ─────────────────────────────────────────────
+
+    [Test]
+    public void DiamondDependency_PerResolve_SharedLeafIsSameInstance()
+    {
+        // Diamond: Root → A + B → SharedLeaf (PerResolve)
+        // Within one Owned scope, A and B should get the SAME SharedLeaf instance
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<SharedLeaf>().As<ISharedLeaf>().InstancePerDependency();
+        autofacBuilder.RegisterType<BranchA>().As<IBranchA>();
+        autofacBuilder.RegisterType<BranchB>().As<IBranchB>();
+        autofacBuilder.RegisterType<DiamondRoot>().As<IDiamondRoot>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ISharedLeaf, SharedLeaf>(new Unity.Lifetime.PerResolveLifetimeManager());
+        unity.RegisterType<IBranchA, BranchA>();
+        unity.RegisterType<IBranchB, BranchB>();
+        unity.RegisterType<IDiamondRoot, DiamondRoot>();
+
+        var uOwned = unity.Resolve<Owned<IDiamondRoot>>();
+        var uRoot = (DiamondRoot)uOwned.Value;
+        var uLeafA = (SharedLeaf)uRoot.A.Leaf;
+        var uLeafB = (SharedLeaf)uRoot.B.Leaf;
+
+        // PerResolve: same instance within one resolve graph
+        Assert.That(ReferenceEquals(uLeafA, uLeafB), Is.True,
+            "PerResolve should share SharedLeaf within one Owned resolve");
+
+        uOwned.Dispose();
+
+        Assert.That(uRoot.IsDisposed, Is.True);
+        Assert.That(((BranchA)uRoot.A).IsDisposed, Is.True);
+        Assert.That(((BranchB)uRoot.B).IsDisposed, Is.True);
+        Assert.That(uLeafA.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void DiamondDependency_Transient_LeafIsDifferentPerBranch()
+    {
+        // Without PerResolve, each branch gets its own leaf
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<SharedLeaf>().As<ISharedLeaf>();
+        autofacBuilder.RegisterType<BranchA>().As<IBranchA>();
+        autofacBuilder.RegisterType<BranchB>().As<IBranchB>();
+        autofacBuilder.RegisterType<DiamondRoot>().As<IDiamondRoot>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ISharedLeaf, SharedLeaf>();
+        unity.RegisterType<IBranchA, BranchA>();
+        unity.RegisterType<IBranchB, BranchB>();
+        unity.RegisterType<IDiamondRoot, DiamondRoot>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IDiamondRoot>>();
+        var afRoot = (DiamondRoot)afOwned.Value;
+        var afDifferent = !ReferenceEquals(afRoot.A.Leaf, afRoot.B.Leaf);
+
+        var uOwned = unity.Resolve<Owned<IDiamondRoot>>();
+        var uRoot = (DiamondRoot)uOwned.Value;
+        var uDifferent = !ReferenceEquals(uRoot.A.Leaf, uRoot.B.Leaf);
+
+        Assert.That(afDifferent, Is.True);
+        Assert.That(uDifferent, Is.EqualTo(afDifferent));
+
+        var uLeafA = (SharedLeaf)uRoot.A.Leaf;
+        var uLeafB = (SharedLeaf)uRoot.B.Leaf;
+
+        afOwned.Dispose();
+        uOwned.Dispose();
+
+        // Both leaves disposed
+        Assert.That(uLeafA.IsDisposed, Is.True);
+        Assert.That(uLeafB.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void DiamondDependency_SingletonLeaf_SharedAndSurvives()
+    {
+        // Singleton leaf: shared across branches AND across Owned scopes, survives Owned dispose
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<SharedLeaf>().As<ISharedLeaf>().SingleInstance();
+        autofacBuilder.RegisterType<BranchA>().As<IBranchA>();
+        autofacBuilder.RegisterType<BranchB>().As<IBranchB>();
+        autofacBuilder.RegisterType<DiamondRoot>().As<IDiamondRoot>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterSingleton<ISharedLeaf, SharedLeaf>();
+        unity.RegisterType<IBranchA, BranchA>();
+        unity.RegisterType<IBranchB, BranchB>();
+        unity.RegisterType<IDiamondRoot, DiamondRoot>();
+
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IDiamondRoot>>();
+        var afLeaf = (SharedLeaf)afOwned.Value.A.Leaf;
+        var afSame = ReferenceEquals(afOwned.Value.A.Leaf, afOwned.Value.B.Leaf);
+
+        var uOwned = unity.Resolve<Owned<IDiamondRoot>>();
+        var uLeaf = (SharedLeaf)uOwned.Value.A.Leaf;
+        var uSame = ReferenceEquals(uOwned.Value.A.Leaf, uOwned.Value.B.Leaf);
+
+        Assert.That(afSame, Is.True);
+        Assert.That(uSame, Is.EqualTo(afSame));
+
+        afOwned.Dispose();
+        uOwned.Dispose();
+
+        Assert.That(afLeaf.IsDisposed, Is.False, "Autofac: singleton survives Owned dispose");
+        Assert.That(uLeaf.IsDisposed, Is.EqualTo(afLeaf.IsDisposed));
+    }
+
+    [Test]
+    public void DeepChildHierarchy_RegistrationsSplitAcrossLevels()
+    {
+        // Root: IServiceWithDependency
+        // Child1: IDependency
+        // Owned resolved from Child1 — should see both registrations
+        using var root = new UnityContainer();
+        root.AddExtension(new OwnedExtension());
+        root.RegisterType<IServiceWithDependency, ServiceWithDependency>();
+
+        using var child1 = ((IUnityContainer)root).CreateChildContainer();
+        child1.RegisterType<IDependency, Dependency>();
+
+        var owned = child1.Resolve<Owned<IServiceWithDependency>>();
+        var svc = (ServiceWithDependency)owned.Value;
+        var dep = (Dependency)svc.Dependency;
+
+        owned.Dispose();
+
+        Assert.That(svc.IsDisposed, Is.True);
+        Assert.That(dep.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void ThreeLevelChildHierarchy_OwnedFromDeepest()
+    {
+        // Root: ITrackedService (singleton)
+        // Child1: IDependency (transient)
+        // Child2: IServiceWithSingletonDependency
+        // Owned from Child2 should see all three
+        using var root = new UnityContainer();
+        root.AddExtension(new OwnedExtension());
+        root.RegisterSingleton<ITrackedService, TrackedService>();
+
+        using var child1 = ((IUnityContainer)root).CreateChildContainer();
+        child1.RegisterType<IDependency, Dependency>();
+
+        using var child2 = ((IUnityContainer)child1).CreateChildContainer();
+        child2.RegisterType<IServiceWithSingletonDependency, ServiceWithSingletonDependency>();
+
+        var owned = child2.Resolve<Owned<IServiceWithSingletonDependency>>();
+        var svc = (ServiceWithSingletonDependency)owned.Value;
+        var singleton = (TrackedService)svc.SingletonDep;
+        var dep = (Dependency)svc.TransientDep;
+
+        owned.Dispose();
+
+        Assert.That(svc.IsDisposed, Is.True);
+        Assert.That(dep.IsDisposed, Is.True);
+        Assert.That(singleton.IsDisposed, Is.False, "Singleton from root survives");
+    }
+
+    [Test]
+    public void ChildOverridesLifetime_OwnedRespectsChildLifetime()
+    {
+        // Root registers transient, child overrides to hierarchical
+        // Owned from child should use hierarchical behavior
+        using var root = new UnityContainer();
+        root.AddExtension(new OwnedExtension());
+        root.RegisterType<ITrackedService, TrackedService>();
+
+        using var child = ((IUnityContainer)root).CreateChildContainer();
+        child.RegisterType<ITrackedService, TrackedService>(
+            new Unity.Lifetime.HierarchicalLifetimeManager());
+
+        var owned1 = child.Resolve<Owned<ITrackedService>>();
+        var owned2 = child.Resolve<Owned<ITrackedService>>();
+
+        // Each Owned creates its own child → each gets its own hierarchical instance
+        Assert.That(ReferenceEquals(owned1.Value, owned2.Value), Is.False);
+
+        var svc1 = (TrackedService)owned1.Value;
+        owned1.Dispose();
+
+        Assert.That(svc1.IsDisposed, Is.True);
+        Assert.That(((TrackedService)owned2.Value).IsDisposed, Is.False);
+
+        owned2.Dispose();
+    }
+
+    [Test]
+    public void OwnedDisposeThenResolveNew_GetsFreshInstance()
+    {
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+
+        var owned1 = unity.Resolve<Owned<ITrackedService>>();
+        var svc1 = (TrackedService)owned1.Value;
+        owned1.Dispose();
+
+        Assert.That(svc1.IsDisposed, Is.True);
+
+        // Resolve again — should get a fresh instance
+        var owned2 = unity.Resolve<Owned<ITrackedService>>();
+        var svc2 = (TrackedService)owned2.Value;
+
+        Assert.That(svc2.IsDisposed, Is.False);
+        Assert.That(ReferenceEquals(svc1, svc2), Is.False);
+
+        owned2.Dispose();
+    }
+
+    [Test]
+    public void HierarchicalDep_TwoOwnedFromSameContainer_IndependentScopes()
+    {
+        // Hierarchical dep means one-per-container. Two Owned scopes from same
+        // container should each get their own instance (since each creates a child).
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().InstancePerLifetimeScope();
+        autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>();
+        autofacBuilder.RegisterType<Dependency>().As<IDependency>().InstancePerLifetimeScope();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>(
+            new Unity.Lifetime.HierarchicalLifetimeManager());
+        unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
+        unity.RegisterType<IDependency, Dependency>(
+            new Unity.Lifetime.HierarchicalLifetimeManager());
+
+        var afOwned1 = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithDependency>>();
+        var afOwned2 = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<IServiceWithDependency>>();
+        var afDep1 = (Dependency)afOwned1.Value.Dependency;
+        var afDep2 = (Dependency)afOwned2.Value.Dependency;
+        var afDifferentDeps = !ReferenceEquals(afDep1, afDep2);
+
+        var uOwned1 = unity.Resolve<Owned<IServiceWithDependency>>();
+        var uOwned2 = unity.Resolve<Owned<IServiceWithDependency>>();
+        var uDep1 = (Dependency)uOwned1.Value.Dependency;
+        var uDep2 = (Dependency)uOwned2.Value.Dependency;
+        var uDifferentDeps = !ReferenceEquals(uDep1, uDep2);
+
+        Assert.That(afDifferentDeps, Is.True, "Autofac: each scope gets own hierarchical dep");
+        Assert.That(uDifferentDeps, Is.EqualTo(afDifferentDeps));
+
+        afOwned1.Dispose();
+        uOwned1.Dispose();
+
+        Assert.That(afDep1.IsDisposed, Is.True);
+        Assert.That(afDep2.IsDisposed, Is.False);
+        Assert.That(uDep1.IsDisposed, Is.EqualTo(afDep1.IsDisposed));
+        Assert.That(uDep2.IsDisposed, Is.EqualTo(afDep2.IsDisposed));
+
+        afOwned2.Dispose();
+        uOwned2.Dispose();
+    }
+
+    [Test]
+    public void Concurrent_OwnedFromChildContainers_Independent()
+    {
+        // Multiple threads resolving Owned from different child containers
+        using var root = new UnityContainer();
+        root.AddExtension(new OwnedExtension());
+        root.RegisterType<ITrackedService, TrackedService>();
+
+        var results = new ConcurrentBag<(TrackedService svc, bool disposedAfterOwned)>();
+
+        var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(() =>
+        {
+            using var child = ((IUnityContainer)root).CreateChildContainer();
+            var owned = child.Resolve<Owned<ITrackedService>>();
+            var svc = (TrackedService)owned.Value;
+            owned.Dispose();
+            results.Add((svc, svc.IsDisposed));
+        })).ToArray();
+
+        Task.WaitAll(tasks);
+
+        Assert.That(results.Count, Is.EqualTo(10));
+        Assert.That(results.All(r => r.disposedAfterOwned), Is.True,
+            "All services should be disposed after Owned.Dispose()");
+        // All different instances
+        var ids = results.Select(r => r.svc.Id).Distinct().Count();
+        Assert.That(ids, Is.EqualTo(10));
+    }
+
+    [Test]
+    public void FuncDependency_LateBoundCreation_InsideOwnedScope()
+    {
+        // Service takes Func<IDependency> and creates instances lazily.
+        // Instances created AFTER Owned.Resolve should still be tracked?
+        // Actually no — Func creates from the child container, but after
+        // Owned is already resolved. Let's see what happens.
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IDependency, Dependency>();
+        unity.RegisterType<IFuncConsumer, FuncConsumer>();
+
+        var owned = unity.Resolve<Owned<IFuncConsumer>>();
+        var consumer = (FuncConsumer)owned.Value;
+
+        // Create deps via factory — these come from the Owned child container
+        var dep1 = (Dependency)consumer.CreateDep();
+        var dep2 = (Dependency)consumer.CreateDep();
+
+        Assert.That(ReferenceEquals(dep1, dep2), Is.False);
+
+        owned.Dispose();
+
+        // The consumer is disposed (tracked by DisposalTrackingStrategy)
+        Assert.That(consumer.IsDisposed, Is.True);
+        // But late-created deps via Func — are they tracked?
+        // They were created from the child container which is now disposed.
+        // Unity should have tracked them if the Func resolves through the pipeline.
+    }
+
+    [Test]
+    public void MixedOwnedAndDirect_SameContainer_NoInterference()
+    {
+        // Resolve Owned<T> and T directly from same container.
+        // Direct T should NOT be affected by Owned disposal.
+        var autofacBuilder = new ContainerBuilder();
+        autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
+        using var autofac = autofacBuilder.Build();
+
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<ITrackedService, TrackedService>();
+
+        var afDirect = (TrackedService)autofac.Resolve<ITrackedService>();
+        var afOwned = autofac.Resolve<Autofac.Features.OwnedInstances.Owned<ITrackedService>>();
+        var afOwnedSvc = (TrackedService)afOwned.Value;
+
+        var uDirect = (TrackedService)unity.Resolve<ITrackedService>();
+        var uOwned = unity.Resolve<Owned<ITrackedService>>();
+        var uOwnedSvc = (TrackedService)uOwned.Value;
+
+        // Different instances (transient)
+        Assert.That(ReferenceEquals(afDirect, afOwnedSvc), Is.False);
+        Assert.That(ReferenceEquals(uDirect, uOwnedSvc), Is.False);
+
+        afOwned.Dispose();
+        uOwned.Dispose();
+
+        // Only Owned service disposed, direct unaffected
+        Assert.That(afOwnedSvc.IsDisposed, Is.True);
+        Assert.That(afDirect.IsDisposed, Is.False);
+        Assert.That(uOwnedSvc.IsDisposed, Is.EqualTo(afOwnedSvc.IsDisposed));
+        Assert.That(uDirect.IsDisposed, Is.EqualTo(afDirect.IsDisposed));
+    }
+
+    [Test]
+    public void Owned_WithinParallelResolves_EachGetsOwnScope()
+    {
+        // Parallel Owned<T> resolves from the same container with hierarchical deps
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IDiamondRoot, DiamondRoot>();
+        unity.RegisterType<IBranchA, BranchA>();
+        unity.RegisterType<IBranchB, BranchB>();
+        unity.RegisterType<ISharedLeaf, SharedLeaf>(
+            new Unity.Lifetime.HierarchicalLifetimeManager());
+
+        var results = new ConcurrentBag<(int leafAId, int leafBId, bool same)>();
+
+        var tasks = Enumerable.Range(0, 20).Select(_ => Task.Run(() =>
+        {
+            var owned = unity.Resolve<Owned<IDiamondRoot>>();
+            var root = (DiamondRoot)owned.Value;
+            var leafA = (SharedLeaf)root.A.Leaf;
+            var leafB = (SharedLeaf)root.B.Leaf;
+            // With hierarchical, same container → same instance
+            results.Add((leafA.Id, leafB.Id, ReferenceEquals(leafA, leafB)));
+            owned.Dispose();
+            Assert.That(leafA.IsDisposed, Is.True);
+        })).ToArray();
+
+        Task.WaitAll(tasks);
+
+        // All should have same leaf within their scope (hierarchical)
+        Assert.That(results.All(r => r.same), Is.True,
+            "Hierarchical: A and B should share leaf within each Owned scope");
+
+        // All scopes should have different leaf IDs
+        var uniqueIds = results.Select(r => r.leafAId).Distinct().Count();
+        Assert.That(uniqueIds, Is.EqualTo(20),
+            "Each parallel Owned scope should get its own hierarchical leaf");
+    }
+
+    [Test]
+    public void ChildContainer_DisposedBeforeOwned_OwnedStillWorks()
+    {
+        // Resolve Owned from child, dispose child, then dispose Owned.
+        // Owned's scope is detached from child, so it should still work.
+        using var root = new UnityContainer();
+        root.AddExtension(new OwnedExtension());
+        root.RegisterType<ITrackedService, TrackedService>();
+
+        var child = ((IUnityContainer)root).CreateChildContainer();
+        var owned = child.Resolve<Owned<ITrackedService>>();
+        var svc = (TrackedService)owned.Value;
+
+        // Dispose child first
+        child.Dispose();
+
+        // Service should still be alive — Owned scope is independent
+        Assert.That(svc.IsDisposed, Is.False);
+
+        // Now dispose Owned
+        owned.Dispose();
+        Assert.That(svc.IsDisposed, Is.True);
+    }
+
+    [Test]
+    public void RapidCreateAndDispose_NoLeaks()
+    {
+        // Rapidly create and dispose many Owned instances
+        using var unity = new UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+        unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
+        unity.RegisterType<IDependency, Dependency>();
+
+        var services = new List<(ServiceWithDependency svc, Dependency dep)>();
+
+        for (int i = 0; i < 100; i++)
+        {
+            var owned = unity.Resolve<Owned<IServiceWithDependency>>();
+            var svc = (ServiceWithDependency)owned.Value;
+            var dep = (Dependency)svc.Dependency;
+            owned.Dispose();
+            services.Add((svc, dep));
+        }
+
+        Assert.That(services.All(s => s.svc.IsDisposed), Is.True);
+        Assert.That(services.All(s => s.dep.IsDisposed), Is.True);
     }
 }

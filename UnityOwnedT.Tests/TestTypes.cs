@@ -276,6 +276,177 @@ public class DisposalCounter : IDisposable
     }
 }
 
+// Open generic types
+public interface IRepository<T>
+{
+    int Id { get; }
+}
+
+public class Repository<T> : IRepository<T>, IDisposable
+{
+    private static int _nextId;
+    public int Id { get; } = Interlocked.Increment(ref _nextId);
+    public bool IsDisposed { get; private set; }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+    }
+
+    public static void ResetCounter() => Interlocked.Exchange(ref _nextId, 0);
+}
+
+// Service that depends on Owned<T>
+public interface IServiceWithOwnedDependency
+{
+    IDependency Dependency { get; }
+}
+
+public class ServiceWithOwnedDependency : IServiceWithOwnedDependency, IDisposable
+{
+    private readonly UnityOwnedT.Owned<IDependency> _ownedDep;
+    public IDependency Dependency => _ownedDep.Value;
+    public bool IsDisposed { get; private set; }
+
+    public ServiceWithOwnedDependency(UnityOwnedT.Owned<IDependency> ownedDep)
+    {
+        _ownedDep = ownedDep;
+    }
+
+    public void Dispose()
+    {
+        _ownedDep.Dispose();
+        IsDisposed = true;
+    }
+}
+
+// Constructor that throws
+public interface IFailingService { }
+
+public class FailingService : IFailingService
+{
+    public FailingService()
+    {
+        throw new InvalidOperationException("Construction failed");
+    }
+}
+
+// Service depending on a failing service
+public interface IServiceWithFailingDep
+{
+    IFailingService Failing { get; }
+}
+
+public class ServiceWithFailingDep : IServiceWithFailingDep, IDisposable
+{
+    public IFailingService Failing { get; }
+    public bool IsDisposed { get; private set; }
+
+    public ServiceWithFailingDep(IFailingService failing, IDependency dependency)
+    {
+        Failing = failing;
+    }
+
+    public void Dispose() => IsDisposed = true;
+}
+
+// Service with multiple disposable dependencies
+public interface IServiceWithMultipleDeps
+{
+    ITrackedService Dep1 { get; }
+    IDependency Dep2 { get; }
+}
+
+public class ServiceWithMultipleDeps : IServiceWithMultipleDeps, IDisposable
+{
+    public ITrackedService Dep1 { get; }
+    public IDependency Dep2 { get; }
+    public bool IsDisposed { get; private set; }
+
+    public ServiceWithMultipleDeps(ITrackedService dep1, IDependency dep2)
+    {
+        Dep1 = dep1;
+        Dep2 = dep2;
+    }
+
+    public void Dispose() => IsDisposed = true;
+}
+
+// Dummy entity for open generic tests
+public class User { }
+public class Order { }
+
+// Diamond dependency: ServiceDiamond → BranchA + BranchB → SharedLeaf
+public interface ISharedLeaf
+{
+    int Id { get; }
+}
+
+public class SharedLeaf : ISharedLeaf, IDisposable
+{
+    private static int _nextId;
+    public int Id { get; } = Interlocked.Increment(ref _nextId);
+    public bool IsDisposed { get; private set; }
+    public void Dispose() => IsDisposed = true;
+    public static void ResetCounter() => Interlocked.Exchange(ref _nextId, 0);
+}
+
+public interface IBranchA
+{
+    ISharedLeaf Leaf { get; }
+}
+
+public class BranchA : IBranchA, IDisposable
+{
+    public ISharedLeaf Leaf { get; }
+    public bool IsDisposed { get; private set; }
+    public BranchA(ISharedLeaf leaf) => Leaf = leaf;
+    public void Dispose() => IsDisposed = true;
+}
+
+public interface IBranchB
+{
+    ISharedLeaf Leaf { get; }
+}
+
+public class BranchB : IBranchB, IDisposable
+{
+    public ISharedLeaf Leaf { get; }
+    public bool IsDisposed { get; private set; }
+    public BranchB(ISharedLeaf leaf) => Leaf = leaf;
+    public void Dispose() => IsDisposed = true;
+}
+
+public interface IDiamondRoot
+{
+    IBranchA A { get; }
+    IBranchB B { get; }
+}
+
+public class DiamondRoot : IDiamondRoot, IDisposable
+{
+    public IBranchA A { get; }
+    public IBranchB B { get; }
+    public bool IsDisposed { get; private set; }
+    public DiamondRoot(IBranchA a, IBranchB b) { A = a; B = b; }
+    public void Dispose() => IsDisposed = true;
+}
+
+// Service that creates late-bound instances via Func
+public interface IFuncConsumer
+{
+    IDependency CreateDep();
+}
+
+public class FuncConsumer : IFuncConsumer, IDisposable
+{
+    private readonly Func<IDependency> _factory;
+    public bool IsDisposed { get; private set; }
+    public FuncConsumer(Func<IDependency> factory) => _factory = factory;
+    public IDependency CreateDep() => _factory();
+    public void Dispose() => IsDisposed = true;
+}
+
 public interface IServiceWithDependency
 {
     IDependency Dependency { get; }
