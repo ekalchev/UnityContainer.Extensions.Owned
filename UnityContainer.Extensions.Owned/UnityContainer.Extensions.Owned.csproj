@@ -12,7 +12,7 @@
     <Description>Autofac-style Owned&lt;T&gt; for Unity Container — deterministic disposal of resolved services and their dependency graphs via isolated scopes.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>unity;dependency-injection;owned;disposal;scope;ioc</PackageTags>
-    <RepositoryUrl>https://github.com/ekalchev/Unity.Extensions.Owned</RepositoryUrl>
+    <RepositoryUrl>https://github.com/ekalchev/UnityContainer.Extensions.Owned</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>

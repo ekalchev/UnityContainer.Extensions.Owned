@@ -2,7 +2,7 @@ using Unity.Builder;
 using Unity.Lifetime;
 using Unity.Strategies;
 
-namespace Unity.Extensions.Owned;
+namespace UnityContainer.Extensions.Owned;
 
 internal class DisposalTrackingStrategy : BuilderStrategy
 {

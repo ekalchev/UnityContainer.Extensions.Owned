@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="UnityContainer.Extensions.Owned\UnityContainer.Extensions.Owned.csproj" />
+  <Project Path="UnityContainer.Extensions.Owned.Tests\UnityContainer.Extensions.Owned.Tests.csproj" />
+  <Project Path="UnityContainer.Extensions.Owned.Benchmarks\UnityContainer.Extensions.Owned.Benchmarks.csproj" />
+</Solution>

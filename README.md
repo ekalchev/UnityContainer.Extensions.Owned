@@ -1,7 +1,7 @@
-# Unity.Extensions.Owned
+# UnityContainer.Extensions.Owned
 
-[![NuGet](https://img.shields.io/nuget/v/Unity.Extensions.Owned.svg)](https://www.nuget.org/packages/Unity.Extensions.Owned)
-[![CI](https://github.com/ekalchev/Unity.Extensions.Owned/actions/workflows/ci.yml/badge.svg)](https://github.com/ekalchev/Unity.Extensions.Owned/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/UnityContainer.Extensions.Owned.svg)](https://www.nuget.org/packages/UnityContainer.Extensions.Owned)
+[![CI](https://github.com/ekalchev/UnityContainer.Extensions.Owned/actions/workflows/ci.yml/badge.svg)](https://github.com/ekalchev/UnityContainer.Extensions.Owned/actions/workflows/ci.yml)
 
 Autofac-style `Owned<T>` for [Unity Container](https://github.com/unitycontainer/unity) (v5.11.x).
 
@@ -10,7 +10,7 @@ Autofac-style `Owned<T>` for [Unity Container](https://github.com/unitycontainer
 ## Install
 
 ```
-dotnet add package Unity.Extensions.Owned
+dotnet add package UnityContainer.Extensions.Owned
 ```
 
 ## Usage
@@ -19,7 +19,7 @@ dotnet add package Unity.Extensions.Owned
 
 ```csharp
 using Unity;
-using Unity.Extensions.Owned;
+using UnityContainer.Extensions.Owned;
 
 var container = new UnityContainer();
 container.AddExtension(new OwnedExtension());

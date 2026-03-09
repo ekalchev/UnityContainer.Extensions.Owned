@@ -2,7 +2,7 @@ using NUnit.Framework;
 using Unity;
 using Unity.Lifetime;
 
-namespace Unity.Extensions.Owned.Tests;
+namespace UnityContainer.Extensions.Owned.Tests;
 
 [TestFixture]
 public class LifetimeManagerTests
@@ -18,10 +18,10 @@ public class LifetimeManagerTests
     [Test]
     public void Transient_NewInstanceEveryResolve()
     {
-        using var plain = new UnityContainer();
+        using var plain = new Unity.UnityContainer();
         plain.RegisterType<ITrackedService, TrackedService>();
 
-        using var withOwned = new UnityContainer();
+        using var withOwned = new Unity.UnityContainer();
         withOwned.AddExtension(new OwnedExtension());
         withOwned.RegisterType<ITrackedService, TrackedService>();
 
@@ -40,13 +40,13 @@ public class LifetimeManagerTests
     {
         TrackedService pService, oService;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<ITrackedService, TrackedService>();
             pService = (TrackedService)plain.Resolve<ITrackedService>();
         }
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<ITrackedService, TrackedService>();
@@ -63,7 +63,7 @@ public class LifetimeManagerTests
         ServiceWithDependency pService, oService;
         Dependency pDep, oDep;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<IDependency, Dependency>();
             plain.RegisterType<IServiceWithDependency, ServiceWithDependency>();
@@ -71,7 +71,7 @@ public class LifetimeManagerTests
             pDep = (Dependency)pService.Dependency;
         }
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<IDependency, Dependency>();
@@ -89,10 +89,10 @@ public class LifetimeManagerTests
     [Test]
     public void ContainerControlled_SameInstanceEveryResolve()
     {
-        using var plain = new UnityContainer();
+        using var plain = new Unity.UnityContainer();
         plain.RegisterType<ITrackedService, TrackedService>(new ContainerControlledLifetimeManager());
 
-        using var withOwned = new UnityContainer();
+        using var withOwned = new Unity.UnityContainer();
         withOwned.AddExtension(new OwnedExtension());
         withOwned.RegisterType<ITrackedService, TrackedService>(new ContainerControlledLifetimeManager());
 
@@ -111,13 +111,13 @@ public class LifetimeManagerTests
     {
         TrackedService pService, oService;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<ITrackedService, TrackedService>(new ContainerControlledLifetimeManager());
             pService = (TrackedService)plain.Resolve<ITrackedService>();
         }
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<ITrackedService, TrackedService>(new ContainerControlledLifetimeManager());
@@ -131,11 +131,11 @@ public class LifetimeManagerTests
     [Test]
     public void Hierarchical_SameInstancePerContainer_DifferentPerChild()
     {
-        using var plain = new UnityContainer();
+        using var plain = new Unity.UnityContainer();
         plain.RegisterType<ITrackedService, TrackedService>(new HierarchicalLifetimeManager());
         using var pChild = ((IUnityContainer)plain).CreateChildContainer();
 
-        using var withOwned = new UnityContainer();
+        using var withOwned = new Unity.UnityContainer();
         withOwned.AddExtension(new OwnedExtension());
         withOwned.RegisterType<ITrackedService, TrackedService>(new HierarchicalLifetimeManager());
         using var oChild = ((IUnityContainer)withOwned).CreateChildContainer();
@@ -161,7 +161,7 @@ public class LifetimeManagerTests
         TrackedService pParentInst, pChildInst;
         TrackedService oParentInst, oChildInst;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<ITrackedService, TrackedService>(new HierarchicalLifetimeManager());
             pParentInst = (TrackedService)plain.Resolve<ITrackedService>();
@@ -176,7 +176,7 @@ public class LifetimeManagerTests
         }
         Assert.That(pParentInst.IsDisposed, Is.True);
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<ITrackedService, TrackedService>(new HierarchicalLifetimeManager());
@@ -196,11 +196,11 @@ public class LifetimeManagerTests
     [Test]
     public void PerResolve_SameInstanceWithinSingleResolve()
     {
-        using var plain = new UnityContainer();
+        using var plain = new Unity.UnityContainer();
         plain.RegisterType<IDependency, Dependency>(new PerResolveLifetimeManager());
         plain.RegisterType<IServiceWithDependency, ServiceWithDependency>();
 
-        using var withOwned = new UnityContainer();
+        using var withOwned = new Unity.UnityContainer();
         withOwned.AddExtension(new OwnedExtension());
         withOwned.RegisterType<IDependency, Dependency>(new PerResolveLifetimeManager());
         withOwned.RegisterType<IServiceWithDependency, ServiceWithDependency>();
@@ -224,13 +224,13 @@ public class LifetimeManagerTests
     {
         Dependency pDep, oDep;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<IDependency, Dependency>(new PerResolveLifetimeManager());
             pDep = (Dependency)plain.Resolve<IDependency>();
         }
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<IDependency, Dependency>(new PerResolveLifetimeManager());
@@ -244,10 +244,10 @@ public class LifetimeManagerTests
     [Test]
     public void PerThread_SameInstanceOnSameThread()
     {
-        using var plain = new UnityContainer();
+        using var plain = new Unity.UnityContainer();
         plain.RegisterType<ITrackedService, TrackedService>(new PerThreadLifetimeManager());
 
-        using var withOwned = new UnityContainer();
+        using var withOwned = new Unity.UnityContainer();
         withOwned.AddExtension(new OwnedExtension());
         withOwned.RegisterType<ITrackedService, TrackedService>(new PerThreadLifetimeManager());
 
@@ -264,10 +264,10 @@ public class LifetimeManagerTests
     [Test]
     public void PerThread_DifferentInstanceOnDifferentThread()
     {
-        using var plain = new UnityContainer();
+        using var plain = new Unity.UnityContainer();
         plain.RegisterType<ITrackedService, TrackedService>(new PerThreadLifetimeManager());
 
-        using var withOwned = new UnityContainer();
+        using var withOwned = new Unity.UnityContainer();
         withOwned.AddExtension(new OwnedExtension());
         withOwned.RegisterType<ITrackedService, TrackedService>(new PerThreadLifetimeManager());
 
@@ -295,13 +295,13 @@ public class LifetimeManagerTests
     {
         TrackedService pService, oService;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<ITrackedService, TrackedService>(new PerThreadLifetimeManager());
             pService = (TrackedService)plain.Resolve<ITrackedService>();
         }
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<ITrackedService, TrackedService>(new PerThreadLifetimeManager());
@@ -315,10 +315,10 @@ public class LifetimeManagerTests
     [Test]
     public void ExternallyControlled_SameInstanceWhileAlive()
     {
-        using var plain = new UnityContainer();
+        using var plain = new Unity.UnityContainer();
         plain.RegisterType<ITrackedService, TrackedService>(new ExternallyControlledLifetimeManager());
 
-        using var withOwned = new UnityContainer();
+        using var withOwned = new Unity.UnityContainer();
         withOwned.AddExtension(new OwnedExtension());
         withOwned.RegisterType<ITrackedService, TrackedService>(new ExternallyControlledLifetimeManager());
 
@@ -337,13 +337,13 @@ public class LifetimeManagerTests
     {
         TrackedService pService, oService;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<ITrackedService, TrackedService>(new ExternallyControlledLifetimeManager());
             pService = (TrackedService)plain.Resolve<ITrackedService>();
         }
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<ITrackedService, TrackedService>(new ExternallyControlledLifetimeManager());
@@ -361,7 +361,7 @@ public class LifetimeManagerTests
         TrackedService pTransient1, pTransient2, oTransient1, oTransient2;
         Dependency pDep, oDep;
 
-        using (var plain = new UnityContainer())
+        using (var plain = new Unity.UnityContainer())
         {
             plain.RegisterType<ITrackedService, TrackedService>(new ContainerControlledLifetimeManager());
             plain.RegisterType<IDependency, Dependency>();
@@ -374,7 +374,7 @@ public class LifetimeManagerTests
             pDep = (Dependency)pSvc.Dependency;
         }
 
-        using (var withOwned = new UnityContainer())
+        using (var withOwned = new Unity.UnityContainer())
         {
             withOwned.AddExtension(new OwnedExtension());
             withOwned.RegisterType<ITrackedService, TrackedService>(new ContainerControlledLifetimeManager());
@@ -406,7 +406,7 @@ public class LifetimeManagerTests
     [Test]
     public void Concurrent_OwnedDoesNotLeakTrackingToParallelTransientResolves()
     {
-        using var container = new UnityContainer();
+        using var container = new Unity.UnityContainer();
         container.AddExtension(new OwnedExtension());
         container.RegisterType<ITrackedService, TrackedService>();
 
@@ -453,7 +453,7 @@ public class LifetimeManagerTests
     [Test]
     public void Concurrent_MultipleOwnedResolvesDoNotInterfere()
     {
-        using var container = new UnityContainer();
+        using var container = new Unity.UnityContainer();
         container.AddExtension(new OwnedExtension());
         container.RegisterType<IDependency, Dependency>();
         container.RegisterType<IServiceWithDependency, ServiceWithDependency>();
@@ -492,7 +492,7 @@ public class LifetimeManagerTests
     [Test]
     public void Concurrent_TransientResolvesDuringOwnedDisposal_NotAffected()
     {
-        using var container = new UnityContainer();
+        using var container = new Unity.UnityContainer();
         container.AddExtension(new OwnedExtension());
         container.RegisterType<ITrackedService, TrackedService>();
 

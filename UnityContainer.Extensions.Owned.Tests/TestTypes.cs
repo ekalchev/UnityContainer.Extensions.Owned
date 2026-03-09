@@ -1,4 +1,4 @@
-namespace Unity.Extensions.Owned.Tests;
+namespace UnityContainer.Extensions.Owned.Tests;
 
 public interface ITrackedService
 {
@@ -304,11 +304,11 @@ public interface IServiceWithOwnedDependency
 
 public class ServiceWithOwnedDependency : IServiceWithOwnedDependency, IDisposable
 {
-    private readonly Unity.Extensions.Owned.Owned<IDependency> _ownedDep;
+    private readonly UnityContainer.Extensions.Owned.Owned<IDependency> _ownedDep;
     public IDependency Dependency => _ownedDep.Value;
     public bool IsDisposed { get; private set; }
 
-    public ServiceWithOwnedDependency(Unity.Extensions.Owned.Owned<IDependency> ownedDep)
+    public ServiceWithOwnedDependency(UnityContainer.Extensions.Owned.Owned<IDependency> ownedDep)
     {
         _ownedDep = ownedDep;
     }

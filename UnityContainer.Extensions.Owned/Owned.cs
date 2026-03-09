@@ -1,4 +1,4 @@
-namespace Unity.Extensions.Owned;
+namespace UnityContainer.Extensions.Owned;
 
 public sealed class Owned<T> : IDisposable
 {

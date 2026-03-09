@@ -3,7 +3,7 @@ using System.Reflection;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using FastExpressionCompiler;
-using Unity.Extensions.Owned;
+using UnityContainer.Extensions.Owned;
 
 BenchmarkRunner.Run<OwnedCreationBenchmark>();
 

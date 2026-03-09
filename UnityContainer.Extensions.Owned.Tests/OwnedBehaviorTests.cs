@@ -5,7 +5,7 @@ using NUnit.Framework;
 using Unity;
 using Unity.Resolution;
 
-namespace Unity.Extensions.Owned.Tests;
+namespace UnityContainer.Extensions.Owned.Tests;
 
 [TestFixture]
 public class OwnedBehaviorTests
@@ -28,7 +28,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -51,7 +51,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -74,7 +74,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -97,7 +97,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -123,7 +123,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -147,7 +147,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
@@ -176,7 +176,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<IDependency, Dependency>();
         unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
@@ -204,7 +204,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -239,7 +239,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Connection>().As<IConnection>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
         unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
@@ -269,7 +269,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Connection>().As<IConnection>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
         unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
@@ -299,7 +299,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Connection>().As<IConnection>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
         unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
@@ -328,7 +328,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Connection>().As<IConnection>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
         unity.RegisterFactory<Func<string, int, Owned<IConnection>>>(c =>
@@ -369,7 +369,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
 
         // Autofac needs interface registration; Unity resolves concrete types directly.
@@ -394,7 +394,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -420,7 +420,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -445,7 +445,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -480,7 +480,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -520,7 +520,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -553,7 +553,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -567,7 +567,7 @@ public class OwnedBehaviorTests
     [Test]
     public void DoubleDispose_DisposesUnderlyingOnlyOnce()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<DisposalCounter>();
 
@@ -588,7 +588,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -611,7 +611,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithSingletonDependency>().As<IServiceWithSingletonDependency>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -648,7 +648,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -698,7 +698,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -723,7 +723,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -748,7 +748,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Greeter>().As<IGreeter>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IGreeter, Greeter>();
         unity.RegisterFactory<Func<string, Owned<IGreeter>>>(c =>
@@ -780,7 +780,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<DeepRoot>().As<IDeepRoot>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -811,7 +811,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithSingletonDependency>().As<IServiceWithSingletonDependency>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -850,7 +850,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<NonDisposableService>().As<INonDisposableService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<INonDisposableService, NonDisposableService>();
 
@@ -876,7 +876,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithNonDisposableMiddle>().As<IServiceWithNonDisposableMiddle>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<INonDisposableMiddle, NonDisposableMiddle>();
@@ -905,7 +905,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -933,7 +933,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<NamedServiceB>().Keyed<INamedService>("b");
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<INamedService, NamedServiceA>("a");
         unity.RegisterType<INamedService, NamedServiceB>("b");
@@ -974,7 +974,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -1009,7 +1009,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1035,7 +1035,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Connection>().As<IConnection>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
 
@@ -1068,7 +1068,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Greeter>().As<IGreeter>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IGreeter, Greeter>();
 
@@ -1093,7 +1093,7 @@ public class OwnedBehaviorTests
     [Test]
     public void ParameterOverride_MultipleParameters()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IMultiParamService, MultiParamService>();
@@ -1117,7 +1117,7 @@ public class OwnedBehaviorTests
     [Test]
     public void ParameterOverride_DifferentValuesPerOwned()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IConnection, Connection>();
 
@@ -1145,7 +1145,7 @@ public class OwnedBehaviorTests
     [Test]
     public void DependencyOverride_OverridesRegisteredDependency()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
@@ -1168,7 +1168,7 @@ public class OwnedBehaviorTests
     [Test]
     public void DependencyOverride_MultipleTypes()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IMultiParamService, MultiParamService>();
 
@@ -1192,7 +1192,7 @@ public class OwnedBehaviorTests
     [Test]
     public void PropertyOverride_SetsPropertyOnResolvedInstance()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IConfigurable, ConfigurableService>(
@@ -1219,7 +1219,7 @@ public class OwnedBehaviorTests
     [Test]
     public void PropertyOverride_DifferentValuesPerOwned()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IConfigurable, ConfigurableService>(
@@ -1246,7 +1246,7 @@ public class OwnedBehaviorTests
     [Test]
     public void FieldOverride_SetsFieldOnResolvedInstance()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IFieldInjected, FieldInjectedService>();
 
@@ -1264,7 +1264,7 @@ public class OwnedBehaviorTests
     [Test]
     public void FieldOverride_DifferentValuesPerOwned()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IFieldInjected, FieldInjectedService>();
 
@@ -1283,7 +1283,7 @@ public class OwnedBehaviorTests
     [Test]
     public void MixedOverrides_AllTypesWorkTogether()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IConfigurable, ConfigurableService>(
@@ -1315,7 +1315,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1349,7 +1349,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1379,7 +1379,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1421,7 +1421,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1469,7 +1469,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1501,7 +1501,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1547,7 +1547,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>(new Unity.Lifetime.HierarchicalLifetimeManager());
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -1573,7 +1573,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>(new Unity.Lifetime.HierarchicalLifetimeManager());
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -1616,7 +1616,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
         unity.RegisterType<IDependency, Dependency>(new Unity.Lifetime.HierarchicalLifetimeManager());
@@ -1643,7 +1643,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1679,7 +1679,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IServiceWithSingletonDependency, ServiceWithSingletonDependency>();
         unity.RegisterSingleton<ITrackedService, TrackedService>();
@@ -1711,7 +1711,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>(new Unity.Lifetime.HierarchicalLifetimeManager());
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -1750,7 +1750,7 @@ public class OwnedBehaviorTests
     public void ChildContainer_PerResolveLifetime_OwnedDisposesCorrectly()
     {
         // PerResolve: same instance within a single resolve graph, new instance per Resolve() call
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>(new Unity.Lifetime.PerResolveLifetimeManager());
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -1779,7 +1779,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>(new Unity.Lifetime.ExternallyControlledLifetimeManager());
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -1807,7 +1807,7 @@ public class OwnedBehaviorTests
         using var autofac = autofacBuilder.Build();
         using var afChild = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDeepRoot, DeepRoot>(new Unity.Lifetime.HierarchicalLifetimeManager());
         unity.RegisterType<IDependency, Dependency>(new Unity.Lifetime.HierarchicalLifetimeManager());
@@ -1834,7 +1834,7 @@ public class OwnedBehaviorTests
     public void ChildContainer_ChildRegistrationOverridesParent_OwnedUsesChildRegistration()
     {
         // Child overrides parent registration — Owned from child should use child's type
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<INamedService, NamedServiceA>();
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -1859,7 +1859,7 @@ public class OwnedBehaviorTests
         using var afChild1 = autofac.BeginLifetimeScope();
         using var afChild2 = autofac.BeginLifetimeScope();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         using var uChild1 = ((IUnityContainer)unity).CreateChildContainer();
@@ -1901,7 +1901,7 @@ public class OwnedBehaviorTests
         using var afChild = autofac.BeginLifetimeScope(b =>
             b.RegisterType<Dependency>().As<IDependency>());
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
         using var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -1940,7 +1940,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         var autofac = autofacBuilder.Build();
 
-        var unity = new UnityContainer();
+        var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -1967,7 +1967,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
         var autofac = autofacBuilder.Build();
 
-        var unity = new UnityContainer();
+        var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -1995,7 +1995,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterGeneric(typeof(Repository<>)).As(typeof(IRepository<>));
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType(typeof(IRepository<>), typeof(Repository<>));
 
@@ -2020,7 +2020,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterGeneric(typeof(Repository<>)).As(typeof(IRepository<>));
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType(typeof(IRepository<>), typeof(Repository<>));
 
@@ -2050,7 +2050,7 @@ public class OwnedBehaviorTests
     public void ConstructorThrows_ChildContainerIsDisposed_NoLeak()
     {
         // If inner type construction fails, the child container should be disposed
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IFailingService, FailingService>();
 
@@ -2069,7 +2069,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithFailingDep>().As<IServiceWithFailingDep>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IFailingService, FailingService>();
@@ -2092,7 +2092,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithMultipleDeps>().As<IServiceWithMultipleDeps>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -2129,7 +2129,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithMultipleDeps>().As<IServiceWithMultipleDeps>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -2160,7 +2160,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -2187,7 +2187,7 @@ public class OwnedBehaviorTests
     [Test]
     public void Owned_ResolvedFromDisposedContainer_Throws()
     {
-        var unity = new UnityContainer();
+        var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
         unity.Dispose();
@@ -2200,7 +2200,7 @@ public class OwnedBehaviorTests
     public void Owned_ServiceDependsOnOwnedDependency()
     {
         // Service constructor takes Owned<IDependency> — transitive Owned
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IServiceWithOwnedDependency, ServiceWithOwnedDependency>();
@@ -2226,7 +2226,7 @@ public class OwnedBehaviorTests
     public void Owned_NamedRegistrations_ResolvedCorrectly()
     {
         // Named registrations should resolve correctly inside Owned scope
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<INamedService, NamedServiceA>("alpha");
         unity.RegisterType<INamedService, NamedServiceB>("beta");
@@ -2253,7 +2253,7 @@ public class OwnedBehaviorTests
     public void Owned_RegisteredFactory_WorksCorrectly()
     {
         // T resolved via factory registration
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterFactory<ITrackedService>(c => new TrackedService());
 
@@ -2274,7 +2274,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -2317,7 +2317,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<DiamondRoot>().As<IDiamondRoot>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ISharedLeaf, SharedLeaf>(new Unity.Lifetime.PerResolveLifetimeManager());
         unity.RegisterType<IBranchA, BranchA>();
@@ -2352,7 +2352,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<DiamondRoot>().As<IDiamondRoot>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ISharedLeaf, SharedLeaf>();
         unity.RegisterType<IBranchA, BranchA>();
@@ -2392,7 +2392,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<DiamondRoot>().As<IDiamondRoot>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ISharedLeaf, SharedLeaf>();
         unity.RegisterType<IBranchA, BranchA>();
@@ -2423,7 +2423,7 @@ public class OwnedBehaviorTests
         // Root: IServiceWithDependency
         // Child1: IDependency
         // Owned resolved from Child1 — should see both registrations
-        using var root = new UnityContainer();
+        using var root = new Unity.UnityContainer();
         root.AddExtension(new OwnedExtension());
         root.RegisterType<IServiceWithDependency, ServiceWithDependency>();
 
@@ -2447,7 +2447,7 @@ public class OwnedBehaviorTests
         // Child1: IDependency (transient)
         // Child2: IServiceWithSingletonDependency
         // Owned from Child2 should see all three
-        using var root = new UnityContainer();
+        using var root = new Unity.UnityContainer();
         root.AddExtension(new OwnedExtension());
         root.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -2474,7 +2474,7 @@ public class OwnedBehaviorTests
     {
         // Root registers transient, child overrides to hierarchical
         // Owned from child should use hierarchical behavior
-        using var root = new UnityContainer();
+        using var root = new Unity.UnityContainer();
         root.AddExtension(new OwnedExtension());
         root.RegisterType<ITrackedService, TrackedService>();
 
@@ -2500,7 +2500,7 @@ public class OwnedBehaviorTests
     [Test]
     public void OwnedDisposeThenResolveNew_GetsFreshInstance()
     {
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -2531,7 +2531,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Dependency>().As<IDependency>().InstancePerLifetimeScope();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>(
             new Unity.Lifetime.HierarchicalLifetimeManager());
@@ -2570,7 +2570,7 @@ public class OwnedBehaviorTests
     public void Concurrent_OwnedFromChildContainers_Independent()
     {
         // Multiple threads resolving Owned from different child containers
-        using var root = new UnityContainer();
+        using var root = new Unity.UnityContainer();
         root.AddExtension(new OwnedExtension());
         root.RegisterType<ITrackedService, TrackedService>();
 
@@ -2602,7 +2602,7 @@ public class OwnedBehaviorTests
         // Instances created AFTER Owned.Resolve should still be tracked?
         // Actually no — Func creates from the child container, but after
         // Owned is already resolved. Let's see what happens.
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IFuncConsumer, FuncConsumer>();
@@ -2634,7 +2634,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -2664,7 +2664,7 @@ public class OwnedBehaviorTests
     public void Owned_WithinParallelResolves_EachGetsOwnScope()
     {
         // Parallel Owned<T> resolves from the same container with hierarchical deps
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDiamondRoot, DiamondRoot>();
         unity.RegisterType<IBranchA, BranchA>();
@@ -2703,7 +2703,7 @@ public class OwnedBehaviorTests
     {
         // Resolve Owned from child, dispose child, then dispose Owned.
         // Owned's scope is detached from child, so it should still work.
-        using var root = new UnityContainer();
+        using var root = new Unity.UnityContainer();
         root.AddExtension(new OwnedExtension());
         root.RegisterType<ITrackedService, TrackedService>();
 
@@ -2726,7 +2726,7 @@ public class OwnedBehaviorTests
     public void RapidCreateAndDispose_NoLeaks()
     {
         // Rapidly create and dispose many Owned instances
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
         unity.RegisterType<IDependency, Dependency>();
@@ -2755,7 +2755,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -2777,7 +2777,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -2799,7 +2799,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().SingleInstance();
         var autofac = autofacBuilder.Build();
 
-        var unity = new UnityContainer();
+        var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
 
@@ -2822,11 +2822,11 @@ public class OwnedBehaviorTests
     {
         // Unity does not track transients for disposal on container dispose
         // (unlike Autofac which does). Verify OwnedExtension doesn't change this.
-        var unityWithExt = new UnityContainer();
+        var unityWithExt = new Unity.UnityContainer();
         unityWithExt.AddExtension(new OwnedExtension());
         unityWithExt.RegisterType<ITrackedService, TrackedService>();
 
-        var unityWithout = new UnityContainer();
+        var unityWithout = new Unity.UnityContainer();
         unityWithout.RegisterType<ITrackedService, TrackedService>();
 
         var withExt = (TrackedService)unityWithExt.Resolve<ITrackedService>();
@@ -2847,7 +2847,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterType<IServiceWithDependency, ServiceWithDependency>();
@@ -2875,7 +2875,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithDependency>().As<IServiceWithDependency>().SingleInstance();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         unity.RegisterSingleton<IServiceWithDependency, ServiceWithDependency>();
@@ -2903,7 +2903,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<Dependency>().As<IDependency>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -2954,7 +2954,7 @@ public class OwnedBehaviorTests
             b.RegisterType<ServiceWithSingletonDependency>().As<IServiceWithSingletonDependency>();
         });
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>();
         var uChild = ((IUnityContainer)unity).CreateChildContainer();
@@ -3002,7 +3002,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TripleLifetimeService>().As<ITripleLifetimeService>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
         unity.RegisterType<ISharedLeaf, SharedLeaf>(new Unity.Lifetime.HierarchicalLifetimeManager());
@@ -3053,7 +3053,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithMultipleDeps>().As<IServiceWithMultipleDeps>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterSingleton<ITrackedService, TrackedService>();
         unity.RegisterType<IDependency, Dependency>();
@@ -3098,7 +3098,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<TrackedService>().As<ITrackedService>().InstancePerLifetimeScope();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>(new Unity.Lifetime.HierarchicalLifetimeManager());
 
@@ -3126,7 +3126,7 @@ public class OwnedBehaviorTests
         autofacBuilder.RegisterType<ServiceWithExternalDep>().As<IServiceWithExternalDep>();
         using var autofac = autofacBuilder.Build();
 
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<IDependency, Dependency>(new Unity.Lifetime.ExternallyControlledLifetimeManager());
         unity.RegisterType<ITrackedService, TrackedService>();
@@ -3163,7 +3163,7 @@ public class OwnedBehaviorTests
     {
         // Dispose the container first, then dispose the Owned.
         // Should not throw (double-dispose of child is safe).
-        var unity = new UnityContainer();
+        var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<ITrackedService, TrackedService>();
 
@@ -3183,7 +3183,7 @@ public class OwnedBehaviorTests
         // Register INamedService as NamedServiceA, resolve Owned.
         // Then re-register as NamedServiceB, resolve new Owned.
         // New Owned should get NamedServiceB.
-        using var unity = new UnityContainer();
+        using var unity = new Unity.UnityContainer();
         unity.AddExtension(new OwnedExtension());
         unity.RegisterType<INamedService, NamedServiceA>();
 

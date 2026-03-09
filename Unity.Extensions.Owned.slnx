@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="Unity.Extensions.Owned\Unity.Extensions.Owned.csproj" />
-  <Project Path="Unity.Extensions.Owned.Tests\Unity.Extensions.Owned.Tests.csproj" />
-  <Project Path="Unity.Extensions.Owned.Benchmarks\Unity.Extensions.Owned.Benchmarks.csproj" />
-</Solution>
