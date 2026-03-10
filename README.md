@@ -88,12 +88,45 @@ public class MyService : IDisposable
 
 `Owned<T>` works correctly when resolved from child containers. It preserves the registration hierarchy — services registered on child containers are visible to the owned scope.
 
+## Singleton disposal order
+
+By default, Unity disposes singletons in **reverse registration order**. This can cause problems when registration order doesn't match the dependency graph — a dependency may be disposed before the service that depends on it.
+
+`OwnedExtension` fixes this automatically. It reorders singleton disposal from registration order to **reverse creation order**, which naturally respects the dependency graph because dependencies are always created before their dependents.
+
+```csharp
+var container = new UnityContainer();
+container.AddExtension(new OwnedExtension());
+
+// Registration order: Root before Leaf (wrong for disposal)
+container.RegisterType<IRoot, Root>(new ContainerControlledLifetimeManager());
+container.RegisterType<ILeaf, Leaf>(new ContainerControlledLifetimeManager());
+
+// Resolving Root creates Leaf first (dependency), then Root
+container.Resolve<IRoot>();
+
+// Without OwnedExtension: disposal order is Leaf → Root (broken — Leaf disposed first)
+// With OwnedExtension:    disposal order is Root → Leaf (correct — dependents first)
+container.Dispose();
+```
+
+This reordering applies to all `ContainerControlledLifetimeManager` singletons in the container. It has no effect on transient or hierarchical lifetimes. The overhead is negligible — the reorder happens only once per singleton, on first creation.
+
+### Disposal rules
+
+| Lifetime | Disposal order |
+|---|---|
+| Transient (inside `Owned<T>` scope) | Reverse creation order |
+| Singleton (`ContainerControlled`) | Reverse creation order (reordered from registration order) |
+| Hierarchical | Follows container hierarchy |
+
 ## How it works
 
-The extension registers two `BuilderStrategy` implementations into Unity's build pipeline:
+The extension registers three `BuilderStrategy` implementations into Unity's build pipeline:
 
 1. **`OwnedBuildStrategy`** (PreCreation stage) — intercepts resolution of `Owned<T>`, creates a child container, resolves `T` from it, and wraps both in `Owned<T>`
 2. **`DisposalTrackingStrategy`** (PostInitialization stage) — tracks `IDisposable` instances created within an owned scope so they are disposed when the scope is disposed
+3. **`SingletonReorderStrategy`** (PostInitialization stage) — reorders singleton lifetime managers in the disposal list from registration order to creation order, ensuring correct disposal of dependent singletons
 
 An `OwnedScopeMarker` registered on the child container is used to detect whether the current resolution is happening inside an owned scope, using Unity's `BuilderContext` policy lookup.
 
