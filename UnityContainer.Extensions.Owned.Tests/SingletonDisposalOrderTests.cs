@@ -230,11 +230,11 @@ public class SingletonDisposalOrderTests
     }
 
     /// <summary>
-    /// Mixed lifetimes: only singletons are reordered, transients and hierarchical
-    /// are unaffected by the reorder strategy.
+    /// Mixed lifetimes: both singletons and hierarchical are reordered because
+    /// HierarchicalLifetimeManager inherits from ContainerControlledLifetimeManager.
     /// </summary>
     [Test]
-    public void Reorder_only_affects_singletons_not_other_lifetimes()
+    public void Reorder_affects_both_singletons_and_hierarchical()
     {
         List<string> disposalOrder = new List<string>();
 
@@ -252,10 +252,38 @@ public class SingletonDisposalOrderTests
 
         container.Dispose();
 
-        // Both disposed, singleton A reordered to creation position, hierarchical B stays
-        Assert.That(disposalOrder, Has.Count.EqualTo(2));
-        Assert.That(disposalOrder, Does.Contain("A"));
-        Assert.That(disposalOrder, Does.Contain("B"));
+        // Both disposed in reverse creation order: B then A
+        Assert.That(disposalOrder, Is.EqualTo(new[] { "B", "A" }));
+    }
+
+    /// <summary>
+    /// Hierarchical lifetime managers are reordered to reverse creation order,
+    /// same as singletons. Register B before A, instantiate A before B.
+    /// Disposal should follow reverse instantiation (B, A), not reverse registration (A, B).
+    /// </summary>
+    [Test]
+    public void Hierarchical_disposed_in_reverse_instantiation_order()
+    {
+        List<string> disposalOrder = new List<string>();
+
+        var container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        // Registration order: B, A
+        container.RegisterType<IB, B>(new HierarchicalLifetimeManager());
+        container.RegisterType<IA, A>(new HierarchicalLifetimeManager());
+
+        // Instantiation order: A, B
+        A a = (A)container.Resolve<IA>();
+        a.DisposalLog = disposalOrder;
+
+        B b = (B)container.Resolve<IB>();
+        b.DisposalLog = disposalOrder;
+
+        container.Dispose();
+
+        // Reverse instantiation order: B -> A
+        Assert.That(disposalOrder, Is.EqualTo(new[] { "B", "A" }));
     }
 
     #region Test types

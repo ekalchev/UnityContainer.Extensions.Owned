@@ -110,7 +110,7 @@ container.Resolve<IRoot>();
 container.Dispose();
 ```
 
-This reordering applies to all `ContainerControlledLifetimeManager` singletons in the container. It has no effect on transient or hierarchical lifetimes. The overhead is negligible — the reorder happens only once per singleton, on first creation.
+This reordering applies to all lifetime managers that inherit from `ContainerControlledLifetimeManager`, which includes both `ContainerControlledLifetimeManager` (singletons) and `HierarchicalLifetimeManager` (per-container singletons). The overhead is negligible — the reorder happens only once per instance, on first creation.
 
 ### Disposal rules
 
@@ -118,7 +118,7 @@ This reordering applies to all `ContainerControlledLifetimeManager` singletons i
 |---|---|
 | Transient (inside `Owned<T>` scope) | Reverse creation order |
 | Singleton (`ContainerControlled`) | Reverse creation order (reordered from registration order) |
-| Hierarchical | Follows container hierarchy |
+| Hierarchical (`HierarchicalLifetimeManager`) | Reverse creation order (reordered from registration order) |
 
 ## How it works
 
