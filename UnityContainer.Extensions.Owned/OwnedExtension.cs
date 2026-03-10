@@ -9,5 +9,6 @@ public class OwnedExtension : UnityContainerExtension
     {
         Context.Strategies.Add(new OwnedBuildStrategy(), UnityBuildStage.PreCreation);
         Context.Strategies.Add(new DisposalTrackingStrategy(), UnityBuildStage.PostInitialization);
+        Context.Strategies.Add(new SingletonReorderStrategy(), UnityBuildStage.PostInitialization);
     }
 }

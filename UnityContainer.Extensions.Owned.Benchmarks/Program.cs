@@ -10,7 +10,8 @@ using UnityContainer.Extensions.Owned;
 BenchmarkRunner.Run(new[]
 {
     typeof(OwnedCreationBenchmark),
-    typeof(ExtensionOverheadBenchmark)
+    typeof(ExtensionOverheadBenchmark),
+    typeof(SingletonOverheadBenchmark)
 });
 
 /// <summary>
@@ -232,6 +233,118 @@ public class ExtensionOverheadBenchmark
     }
 }
 
+/// <summary>
+/// Measures the overhead of SingletonReorderStrategy on singleton resolutions.
+/// Singletons are created once, so we benchmark both first-resolve (cold) and
+/// subsequent-resolve (hot) paths, plus disposal cost.
+/// </summary>
+[MemoryDiagnoser]
+public class SingletonOverheadBenchmark
+{
+    // --- First resolve (cold): singleton creation + reorder ---
+
+    [Benchmark(Baseline = true)]
+    public object Singleton_FirstResolve_WithoutExtension()
+    {
+        Unity.UnityContainer container = new Unity.UnityContainer();
+        container.RegisterType<ISimpleService, SimpleService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        object result = container.Resolve<ISimpleService>();
+        container.Dispose();
+        return result;
+    }
+
+    [Benchmark]
+    public object Singleton_FirstResolve_WithExtension()
+    {
+        Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+        container.RegisterType<ISimpleService, SimpleService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        object result = container.Resolve<ISimpleService>();
+        container.Dispose();
+        return result;
+    }
+
+    // --- First resolve with dependency chain ---
+
+    [Benchmark]
+    public object SingletonChain_FirstResolve_WithoutExtension()
+    {
+        Unity.UnityContainer container = new Unity.UnityContainer();
+        container.RegisterType<ISimpleService, SimpleService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<IServiceWithDep, ServiceWithDep>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<IDeepService, DeepService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        object result = container.Resolve<IDeepService>();
+        container.Dispose();
+        return result;
+    }
+
+    [Benchmark]
+    public object SingletonChain_FirstResolve_WithExtension()
+    {
+        Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+        container.RegisterType<ISimpleService, SimpleService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<IServiceWithDep, ServiceWithDep>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<IDeepService, DeepService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        object result = container.Resolve<IDeepService>();
+        container.Dispose();
+        return result;
+    }
+
+    // --- Hot path: singleton already cached, subsequent resolves ---
+
+    private Unity.UnityContainer hotWithout = null!;
+    private Unity.UnityContainer hotWith = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        hotWithout = new Unity.UnityContainer();
+        hotWithout.RegisterType<ISimpleService, SimpleService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        hotWithout.RegisterType<IServiceWithDep, ServiceWithDep>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        hotWithout.RegisterType<IDeepService, DeepService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        // Warm up — create the singletons
+        hotWithout.Resolve<IDeepService>();
+
+        hotWith = new Unity.UnityContainer();
+        hotWith.AddExtension(new OwnedExtension());
+        hotWith.RegisterType<ISimpleService, SimpleService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        hotWith.RegisterType<IServiceWithDep, ServiceWithDep>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        hotWith.RegisterType<IDeepService, DeepService>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        // Warm up — create the singletons
+        hotWith.Resolve<IDeepService>();
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        hotWithout.Dispose();
+        hotWith.Dispose();
+    }
+
+    [Benchmark]
+    public object Singleton_HotResolve_WithoutExtension()
+    {
+        return hotWithout.Resolve<IDeepService>();
+    }
+
+    [Benchmark]
+    public object Singleton_HotResolve_WithExtension()
+    {
+        return hotWith.Resolve<IDeepService>();
+    }
+
+    // --- Owned<T> wrapping a singleton ---
+
+    [Benchmark]
+    public object OwnedSingleton_WithExtension()
+    {
+        Owned<IDeepService> owned = hotWith.Resolve<Owned<IDeepService>>();
+        owned.Dispose();
+        return owned;
+    }
+}
+
 // Benchmark helper types
 public interface ISimpleService { }
 
@@ -249,5 +362,20 @@ public class ServiceWithDep : IServiceWithDep
     public ServiceWithDep(ISimpleService dependency)
     {
         Dependency = dependency;
+    }
+}
+
+public interface IDeepService
+{
+    IServiceWithDep ServiceWithDep { get; }
+}
+
+public class DeepService : IDeepService
+{
+    public IServiceWithDep ServiceWithDep { get; }
+
+    public DeepService(IServiceWithDep serviceWithDep)
+    {
+        ServiceWithDep = serviceWithDep;
     }
 }

@@ -3400,4 +3400,343 @@ public class OwnedBehaviorTests
         Assert.Throws<ResolutionFailedException>(() => unity.Resolve<IValueService>());
         Assert.Throws<ResolutionFailedException>(() => unity.Resolve<Owned<IValueService>>());
     }
+
+    /// <summary>
+    /// Diamond dependency graph where two branches each get their own transient SharedLeaf.
+    /// Both SharedLeaf instances must be tracked and disposed when Owned is disposed.
+    /// Disposal order must be reverse of instantiation order.
+    /// Creation order: SharedLeaf1, BranchA, SharedLeaf2, BranchB, DiamondRoot
+    /// Disposal order: DiamondRoot, BranchB, SharedLeaf2, BranchA, SharedLeaf1
+    /// </summary>
+    [Test]
+    public void Owned_DiamondTransients_DisposedInReverseInstantiationOrder()
+    {
+        SharedLeaf.ResetCounter();
+        List<string> disposalOrder = new List<string>();
+
+        using Unity.UnityContainer unity = new Unity.UnityContainer();
+        unity.AddExtension(new OwnedExtension());
+
+        // All transient — diamond: DiamondRoot → BranchA(SharedLeaf), BranchB(SharedLeaf)
+        unity.RegisterType<IDiamondRoot, DiamondRoot>();
+        unity.RegisterType<IBranchA, BranchA>();
+        unity.RegisterType<IBranchB, BranchB>();
+        unity.RegisterType<ISharedLeaf, SharedLeaf>();
+
+        Owned<IDiamondRoot> owned = unity.Resolve<Owned<IDiamondRoot>>();
+
+        DiamondRoot root = (DiamondRoot)owned.Value;
+        BranchA branchA = (BranchA)root.A;
+        BranchB branchB = (BranchB)root.B;
+        SharedLeaf leaf1 = (SharedLeaf)branchA.Leaf;
+        SharedLeaf leaf2 = (SharedLeaf)branchB.Leaf;
+
+        // Two distinct transient instances of SharedLeaf
+        Assert.That(ReferenceEquals(leaf1, leaf2), Is.False, "Each branch should get its own SharedLeaf instance");
+
+        // Wire up disposal logging
+        leaf1.DisposalLog = disposalOrder;
+        branchA.DisposalLog = disposalOrder;
+        leaf2.DisposalLog = disposalOrder;
+        branchB.DisposalLog = disposalOrder;
+        root.DisposalLog = disposalOrder;
+
+        owned.Dispose();
+
+        // Creation order: SharedLeaf1, BranchA, SharedLeaf2, BranchB, DiamondRoot
+        // Reverse creation order: DiamondRoot, BranchB, SharedLeaf2, BranchA, SharedLeaf1
+        Assert.That(disposalOrder, Is.EqualTo(new[]
+        {
+            "DiamondRoot", "BranchB", "SharedLeaf2", "BranchA", "SharedLeaf1"
+        }));
+    }
+
+    // ── Bug-hunting: Singleton + Owned interaction ──────────────────────
+
+    /// <summary>
+    /// Case 1: Singleton first created inside Owned scope.
+    /// SingletonReorderStrategy.PostBuildUp fires in the child container context.
+    /// context.Lifetime.Remove(lm) is a no-op (LM lives in parent).
+    /// context.Lifetime.Add(lm) could ADD the singleton's LM to the child lifetime.
+    /// When Owned disposes → child disposes → singleton prematurely killed.
+    /// </summary>
+    [Test]
+    public void Singleton_first_created_inside_Owned_is_NOT_disposed_with_Owned()
+    {
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        container.RegisterType<ISingletonMiddle, SingletonMiddle>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<ITransientLeaf, TransientLeaf>();
+        container.RegisterType<ITransientRoot, TransientRoot>();
+
+        // Singleton has NOT been created yet — first creation happens inside Owned
+        Owned<ITransientRoot> owned = container.Resolve<Owned<ITransientRoot>>();
+
+        TransientRoot root = (TransientRoot)owned.Value;
+        SingletonMiddle middle = (SingletonMiddle)root.Middle;
+        TransientLeaf leaf = (TransientLeaf)((SingletonMiddle)root.Middle).Leaf;
+
+        Assert.That(middle.IsDisposed, Is.False);
+
+        // Dispose the Owned scope — only transients should die
+        owned.Dispose();
+
+        Assert.That(root.IsDisposed, Is.True, "TransientRoot should be disposed");
+        Assert.That(middle.IsDisposed, Is.False, "Singleton should NOT be disposed when Owned is disposed");
+        Assert.That(leaf.IsDisposed, Is.False, "TransientLeaf owned by singleton should NOT be disposed");
+
+        // Singleton should still be resolvable and be the same instance
+        SingletonMiddle resolvedAgain = (SingletonMiddle)container.Resolve<ISingletonMiddle>();
+        Assert.That(ReferenceEquals(middle, resolvedAgain), Is.True, "Singleton should still be alive");
+    }
+
+    /// <summary>
+    /// Case 2: Transient → Singleton → Transient chain inside Owned.
+    /// The singleton breaks the transient chain. Only transients should be tracked in
+    /// the child container. Verify disposal order of the transients is still correct.
+    /// </summary>
+    [Test]
+    public void Owned_mixed_chain_transient_singleton_transient_disposal_order()
+    {
+        List<string> disposalOrder = new List<string>();
+
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        // Pre-create the singleton so it already exists before Owned resolution
+        container.RegisterType<ISingletonMiddle, SingletonMiddle>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<ITransientLeaf, TransientLeaf>();
+        container.RegisterType<ITransientRoot, TransientRoot>();
+
+        // Create singleton first so it's cached
+        SingletonMiddle singleton = (SingletonMiddle)container.Resolve<ISingletonMiddle>();
+
+        Owned<ITransientRoot> owned = container.Resolve<Owned<ITransientRoot>>();
+
+        TransientRoot root = (TransientRoot)owned.Value;
+        root.DisposalLog = disposalOrder;
+        singleton.DisposalLog = disposalOrder;
+
+        owned.Dispose();
+
+        // Only TransientRoot should be disposed (it's the only transient tracked in child)
+        // TransientLeaf was created with the singleton (before Owned) and is NOT in the child scope
+        // SingletonMiddle is a singleton — not tracked in child
+        Assert.That(disposalOrder, Does.Contain("TransientRoot"));
+        Assert.That(disposalOrder, Does.Not.Contain("SingletonMiddle"), "Singleton should not be disposed with Owned");
+    }
+
+    /// <summary>
+    /// Case 3: Func&lt;T&gt; late-created transients inside Owned.
+    /// A service uses Func&lt;IDependency&gt; to create instances after initial resolution.
+    /// Those late-created transients should be tracked in the child and disposed in
+    /// reverse creation order (late-created first, then the consumer).
+    /// </summary>
+    [Test]
+    public void Owned_FuncFactory_late_created_transients_tracked_and_disposed()
+    {
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        container.RegisterType<IFuncConsumer, FuncConsumer>();
+        container.RegisterType<IDependency, Dependency>();
+
+        Owned<IFuncConsumer> owned = container.Resolve<Owned<IFuncConsumer>>();
+
+        FuncConsumer consumer = (FuncConsumer)owned.Value;
+
+        // Late-create two dependencies via factory after initial resolution
+        Dependency dep1 = (Dependency)consumer.CreateDep();
+        Dependency dep2 = (Dependency)consumer.CreateDep();
+
+        Assert.That(dep1.IsDisposed, Is.False);
+        Assert.That(dep2.IsDisposed, Is.False);
+        Assert.That(consumer.IsDisposed, Is.False);
+
+        owned.Dispose();
+
+        // All three should be disposed
+        Assert.That(consumer.IsDisposed, Is.True, "FuncConsumer should be disposed");
+        Assert.That(dep1.IsDisposed, Is.True, "Late-created dep1 should be disposed");
+        Assert.That(dep2.IsDisposed, Is.True, "Late-created dep2 should be disposed");
+    }
+
+    /// <summary>
+    /// Case 4: Two Owned scopes sharing the same singleton.
+    /// First Owned resolution triggers singleton creation.
+    /// Disposing either Owned must NOT kill the singleton.
+    /// Only parent container disposal should dispose it.
+    /// </summary>
+    [Test]
+    public void Two_Owned_scopes_sharing_singleton_neither_disposes_it()
+    {
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        container.RegisterType<ISingletonMiddle, SingletonMiddle>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<ITransientLeaf, TransientLeaf>();
+        container.RegisterType<ITransientRoot, TransientRoot>();
+
+        // First Owned — triggers singleton creation
+        Owned<ITransientRoot> owned1 = container.Resolve<Owned<ITransientRoot>>();
+        SingletonMiddle singleton = (SingletonMiddle)((TransientRoot)owned1.Value).Middle;
+
+        // Second Owned — reuses the cached singleton
+        Owned<ITransientRoot> owned2 = container.Resolve<Owned<ITransientRoot>>();
+        SingletonMiddle singletonFromOwned2 = (SingletonMiddle)((TransientRoot)owned2.Value).Middle;
+
+        Assert.That(ReferenceEquals(singleton, singletonFromOwned2), Is.True, "Same singleton instance");
+
+        // Dispose first Owned
+        owned1.Dispose();
+        Assert.That(singleton.IsDisposed, Is.False, "Singleton must survive first Owned disposal");
+
+        // Dispose second Owned
+        owned2.Dispose();
+        Assert.That(singleton.IsDisposed, Is.False, "Singleton must survive second Owned disposal");
+
+        // Singleton still resolvable
+        SingletonMiddle resolvedAgain = (SingletonMiddle)container.Resolve<ISingletonMiddle>();
+        Assert.That(ReferenceEquals(singleton, resolvedAgain), Is.True, "Singleton should still be alive and same instance");
+    }
+
+    // ── Bug-hunting: Nested Owned scopes ────────────────────────────────
+
+    /// <summary>
+    /// Nested Owned: root → child1 (outer Owned) → child2 (inner Owned).
+    /// Disposing outer Owned should dispose both outer and inner services.
+    /// OuterService.Dispose() disposes its inner Owned.
+    /// </summary>
+    [Test]
+    public void Nested_Owned_disposing_outer_disposes_inner()
+    {
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        container.RegisterType<IOuterService, OuterService>();
+        container.RegisterType<IInnerService, InnerService>();
+
+        Owned<IOuterService> outerOwned = container.Resolve<Owned<IOuterService>>();
+
+        OuterService outer = (OuterService)outerOwned.Value;
+        InnerService inner = (InnerService)outer.InnerOwned.Value;
+
+        Assert.That(outer.IsDisposed, Is.False);
+        Assert.That(inner.IsDisposed, Is.False);
+
+        outerOwned.Dispose();
+
+        Assert.That(outer.IsDisposed, Is.True, "OuterService should be disposed");
+        Assert.That(inner.IsDisposed, Is.True, "InnerService should be disposed via OuterService.Dispose");
+    }
+
+    /// <summary>
+    /// Nested Owned with singleton at the bottom: root → child1 → child2.
+    /// InnerService depends on a singleton that hasn't been created yet.
+    /// The singleton is first created in the grandchild (child2) context.
+    /// SingletonReorderStrategy fires in child2 — must NOT add LM to child2's lifetime.
+    /// Disposing both Owned scopes must NOT kill the singleton.
+    /// </summary>
+    [Test]
+    public void Nested_Owned_singleton_first_created_in_grandchild_survives_disposal()
+    {
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        container.RegisterType<IOuterService, OuterService>();
+        container.RegisterType<IInnerService, InnerService>();
+        container.RegisterType<ISingletonMiddle, SingletonMiddle>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<ITransientLeaf, TransientLeaf>();
+
+        // Singleton has NOT been created yet — first creation happens in grandchild (child2)
+        Owned<IOuterService> outerOwned = container.Resolve<Owned<IOuterService>>();
+
+        OuterService outer = (OuterService)outerOwned.Value;
+        InnerService inner = (InnerService)outer.InnerOwned.Value;
+        SingletonMiddle singleton = (SingletonMiddle)inner.Singleton!;
+
+        Assert.That(singleton.IsDisposed, Is.False);
+
+        // Dispose the outer Owned — kills both child1 and child2
+        outerOwned.Dispose();
+
+        Assert.That(outer.IsDisposed, Is.True, "OuterService should be disposed");
+        Assert.That(inner.IsDisposed, Is.True, "InnerService should be disposed");
+        Assert.That(singleton.IsDisposed, Is.False, "Singleton must NOT be disposed when nested Owned scopes are disposed");
+
+        // Singleton should still be alive and resolvable
+        SingletonMiddle resolvedAgain = (SingletonMiddle)container.Resolve<ISingletonMiddle>();
+        Assert.That(ReferenceEquals(singleton, resolvedAgain), Is.True, "Singleton should be the same instance");
+    }
+
+    /// <summary>
+    /// Nested Owned: disposing inner Owned first, then outer.
+    /// Singleton created in inner scope must survive both disposals.
+    /// </summary>
+    [Test]
+    public void Nested_Owned_dispose_inner_first_then_outer_singleton_survives()
+    {
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        container.RegisterType<IOuterService, OuterService>();
+        container.RegisterType<IInnerService, InnerService>();
+        container.RegisterType<ISingletonMiddle, SingletonMiddle>(new Unity.Lifetime.ContainerControlledLifetimeManager());
+        container.RegisterType<ITransientLeaf, TransientLeaf>();
+
+        Owned<IOuterService> outerOwned = container.Resolve<Owned<IOuterService>>();
+
+        OuterService outer = (OuterService)outerOwned.Value;
+        Owned<IInnerService> innerOwned = outer.InnerOwned;
+        InnerService inner = (InnerService)innerOwned.Value;
+        SingletonMiddle singleton = (SingletonMiddle)inner.Singleton!;
+
+        // Dispose inner Owned first (manually, not through outer)
+        innerOwned.Dispose();
+
+        Assert.That(inner.IsDisposed, Is.True, "InnerService should be disposed");
+        Assert.That(singleton.IsDisposed, Is.False, "Singleton must survive inner Owned disposal");
+        Assert.That(outer.IsDisposed, Is.False, "OuterService should still be alive");
+
+        // Now dispose outer
+        outerOwned.Dispose();
+
+        Assert.That(outer.IsDisposed, Is.True, "OuterService should be disposed");
+        Assert.That(singleton.IsDisposed, Is.False, "Singleton must survive outer Owned disposal too");
+
+        // Still alive
+        SingletonMiddle resolvedAgain = (SingletonMiddle)container.Resolve<ISingletonMiddle>();
+        Assert.That(ReferenceEquals(singleton, resolvedAgain), Is.True);
+    }
+
+    /// <summary>
+    /// Nested Owned disposal order: verify transients across nested scopes
+    /// are disposed in reverse creation order.
+    /// </summary>
+    [Test]
+    public void Nested_Owned_transients_disposed_in_reverse_creation_order()
+    {
+        List<string> disposalOrder = new List<string>();
+
+        using Unity.UnityContainer container = new Unity.UnityContainer();
+        container.AddExtension(new OwnedExtension());
+
+        container.RegisterType<IOuterService, OuterService>();
+        container.RegisterType<IInnerService, InnerService>();
+
+        Owned<IOuterService> outerOwned = container.Resolve<Owned<IOuterService>>();
+
+        OuterService outer = (OuterService)outerOwned.Value;
+        InnerService inner = (InnerService)outer.InnerOwned.Value;
+
+        outer.DisposalLog = disposalOrder;
+        inner.DisposalLog = disposalOrder;
+
+        outerOwned.Dispose();
+
+        // OuterService.Dispose() logs "OuterService", then calls InnerOwned.Dispose()
+        // which disposes child2 → InnerService logs "InnerService"
+        Assert.That(disposalOrder, Is.EqualTo(new[] { "OuterService", "InnerService" }));
+    }
 }

@@ -387,7 +387,14 @@ public class SharedLeaf : ISharedLeaf, IDisposable
     private static int _nextId;
     public int Id { get; } = Interlocked.Increment(ref _nextId);
     public bool IsDisposed { get; private set; }
-    public void Dispose() => IsDisposed = true;
+    public List<string>? DisposalLog { get; set; }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add($"SharedLeaf{Id}");
+    }
+
     public static void ResetCounter() => Interlocked.Exchange(ref _nextId, 0);
 }
 
@@ -400,8 +407,14 @@ public class BranchA : IBranchA, IDisposable
 {
     public ISharedLeaf Leaf { get; }
     public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
     public BranchA(ISharedLeaf leaf) => Leaf = leaf;
-    public void Dispose() => IsDisposed = true;
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("BranchA");
+    }
 }
 
 public interface IBranchB
@@ -413,8 +426,14 @@ public class BranchB : IBranchB, IDisposable
 {
     public ISharedLeaf Leaf { get; }
     public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
     public BranchB(ISharedLeaf leaf) => Leaf = leaf;
-    public void Dispose() => IsDisposed = true;
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("BranchB");
+    }
 }
 
 public interface IDiamondRoot
@@ -428,8 +447,124 @@ public class DiamondRoot : IDiamondRoot, IDisposable
     public IBranchA A { get; }
     public IBranchB B { get; }
     public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
     public DiamondRoot(IBranchA a, IBranchB b) { A = a; B = b; }
-    public void Dispose() => IsDisposed = true;
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("DiamondRoot");
+    }
+}
+
+// Mixed chain: TransientRoot → SingletonMiddle → TransientLeaf
+// Used for testing disposal order when a singleton sits in the middle of a transient chain
+public interface ITransientLeaf { }
+
+public class TransientLeaf : ITransientLeaf, IDisposable
+{
+    public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("TransientLeaf");
+    }
+}
+
+public interface ISingletonMiddle
+{
+    ITransientLeaf Leaf { get; }
+}
+
+public class SingletonMiddle : ISingletonMiddle, IDisposable
+{
+    public ITransientLeaf Leaf { get; }
+    public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
+
+    public SingletonMiddle(ITransientLeaf leaf)
+    {
+        Leaf = leaf;
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("SingletonMiddle");
+    }
+}
+
+public interface ITransientRoot
+{
+    ISingletonMiddle Middle { get; }
+}
+
+public class TransientRoot : ITransientRoot, IDisposable
+{
+    public ISingletonMiddle Middle { get; }
+    public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
+
+    public TransientRoot(ISingletonMiddle middle)
+    {
+        Middle = middle;
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("TransientRoot");
+    }
+}
+
+// Nested Owned: OuterOwned depends on Owned<InnerOwned>
+// Used for testing root → child1 (outer Owned) → child2 (inner Owned)
+public interface IInnerService { }
+
+public class InnerService : IInnerService, IDisposable
+{
+    public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
+    public ISingletonMiddle? Singleton { get; }
+
+    public InnerService() { }
+
+    public InnerService(ISingletonMiddle singleton)
+    {
+        Singleton = singleton;
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("InnerService");
+    }
+}
+
+public interface IOuterService
+{
+    Owned<IInnerService> InnerOwned { get; }
+}
+
+public class OuterService : IOuterService, IDisposable
+{
+    public Owned<IInnerService> InnerOwned { get; }
+    public bool IsDisposed { get; private set; }
+    public List<string>? DisposalLog { get; set; }
+
+    public OuterService(Owned<IInnerService> innerOwned)
+    {
+        InnerOwned = innerOwned;
+    }
+
+    public void Dispose()
+    {
+        IsDisposed = true;
+        DisposalLog?.Add("OuterService");
+        InnerOwned.Dispose();
+    }
 }
 
 // Service that creates late-bound instances via Func
