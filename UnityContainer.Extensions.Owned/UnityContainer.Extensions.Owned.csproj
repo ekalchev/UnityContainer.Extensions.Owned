@@ -7,7 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
 
     <PackageId>UnityContainer.Extensions.Owned</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
     <Authors>Emil Kalchev</Authors>
     <Description>Autofac-style Owned&lt;T&gt; for Unity Container — deterministic disposal of resolved services and their dependency graphs via isolated scopes.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
